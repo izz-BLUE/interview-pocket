@@ -289,7 +289,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('getCramQuestions', (_event, params?: { sourceFile?: string | null; limit?: number }) => {
     try {
       const sourceFile = params?.sourceFile ?? null
-      const limit = params?.limit ?? 200
+      const rawLimit = params?.limit ?? 200
+      const limit = Math.min(Math.max(Number(rawLimit) || 200, 1), 500)
       const questions = queryAll(`
         SELECT id, title, category, source_file, memory_point
         FROM questions

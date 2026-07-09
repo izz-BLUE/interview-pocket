@@ -167,7 +167,8 @@ function restart() {
 function parseJsonField(field: string | null): string[] {
   if (!field) return []
   try {
-    return JSON.parse(field)
+    const parsed = JSON.parse(field)
+    return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
   }
