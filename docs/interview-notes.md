@@ -109,7 +109,7 @@ sql.js 是纯 JavaScript 实现的 SQLite，不需要编译原生模块。选择
 
 **回答**：
 
-在导入时，对每道题生成一个唯一标识：`question 内容 + source_file`。
+在导入时，对每道题生成一个唯一标识：`title + source_file`。
 
 插入前先查询是否已存在，如果存在就跳过，并在导入报告中记录 `skippedCount`。
 
@@ -151,10 +151,12 @@ sql.js 是纯 JavaScript 实现的 SQLite，不需要编译原生模块。选择
 进入错题复习后：
 
 - 展示题目卡片，用户查看答案并自评。
-- 提交评分后，如果评分 >= 3，`wrong_count` 减 1；如果评分 <= 2，`wrong_count` 不变。
-- 当 `wrong_count` 降为 0，这道题就从错题列表中移除。
+- 提交评分走 `submitReview`，写入 `review_records` 并更新 `review_progress`。
+- 如果评分 <= 2，`wrong_count` 会继续 +1。
+- 如果评分 >= 3，`wrong_count` 不会自动减少。
+- 如果用户认为已经掌握，需要通过 `resetWrongCount` 将 `wrong_count` 重置为 0。
 
-这样形成一个"错题 → 重做 → 掌握 → 移出"的闭环。
+这样把"继续复习"和"确认掌握"拆成两个动作，避免一次高分就自动移出错题池。
 
 ### Q9：突击模式为什么不写 review_records？
 
