@@ -25,7 +25,7 @@ onMounted(async () => {
 })
 
 function goToReview() {
-  router.push('/questions')
+  router.push('/review')
 }
 
 function goToImport() {

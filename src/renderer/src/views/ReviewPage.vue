@@ -7,9 +7,11 @@ import type { QuestionDetail } from '../../../preload/index.d'
 const router = useRouter()
 const route = useRoute()
 const question = ref<QuestionDetail | null>(null)
-const loading = ref(true)
+const loading = ref(false)
 const showAnswer = ref(false)
 const reviewSubmitted = ref(false)
+const completed = ref(false)
+const submitResult = ref<any | null>(null)
 const activeTab = ref<'standard' | 'short' | 'deep' | 'raw'>('standard')
 
 // 计算属性：是否有任何答案内容
@@ -52,29 +54,66 @@ const showRawTab = computed(() => {
 })
 
 onMounted(() => {
-  loadQuestion()
+  loadInitialQuestion()
 })
 
-async function loadQuestion() {
-  const id = Number(route.params.id)
-  if (isNaN(id)) {
-    router.push('/questions')
-    return
-  }
+// 重置题目状态
+function resetQuestionState() {
+  showAnswer.value = false
+  reviewSubmitted.value = false
+  activeTab.value = 'standard'
+  submitResult.value = null
+}
 
+// 根据 ID 加载题目
+async function loadQuestionById(id: number) {
   loading.value = true
   try {
     const result = await api.getQuestionById(id)
     if (result.success && result.data) {
       question.value = result.data
+      resetQuestionState()
     } else {
-      router.push('/questions')
+      question.value = null
     }
   } catch (error) {
     console.error('Failed to load question:', error)
-    router.push('/questions')
+    question.value = null
   } finally {
     loading.value = false
+  }
+}
+
+// 加载第一道待复习题
+async function loadFirstDueQuestion() {
+  loading.value = true
+  try {
+    const result = await api.getDueQuestions()
+    if (result.success && result.data && result.data.length > 0) {
+      await loadQuestionById(result.data[0].id)
+      completed.value = false
+    } else {
+      question.value = null
+      completed.value = true
+    }
+  } catch (error) {
+    console.error('Failed to load due questions:', error)
+    question.value = null
+    completed.value = true
+  } finally {
+    loading.value = false
+  }
+}
+
+// 加载初始题目
+async function loadInitialQuestion() {
+  const id = Number(route.params.id)
+  if (id && !isNaN(id)) {
+    // 单题详情模式
+    await loadQuestionById(id)
+  } else {
+    // 队列复习模式
+    await loadFirstDueQuestion()
   }
 }
 
@@ -89,15 +128,15 @@ async function submitScore(score: number) {
     const result = await api.submitReview(question.value.id, score)
     if (result.success) {
       reviewSubmitted.value = true
+      submitResult.value = result
     }
   } catch (error) {
     console.error('Failed to submit review:', error)
   }
 }
 
-function nextQuestion() {
-  // 简单实现：返回列表
-  router.push('/questions')
+async function nextQuestion() {
+  await loadFirstDueQuestion()
 }
 
 // 解析 JSON 字段
@@ -113,9 +152,20 @@ function parseJsonField(field: string | null): string[] {
 
 <template>
   <div class="review-container">
-    <button class="back-btn" @click="router.push('/questions')">← 返回列表</button>
+    <button class="back-btn" @click="router.push('/')">← 返回首页</button>
 
     <div v-if="loading" class="loading">加载中...</div>
+
+    <div v-else-if="completed" class="completed-state">
+      <div class="completed-card">
+        <h2>🎉 今日复习已完成</h2>
+        <p>所有待复习题目都已复习完毕</p>
+        <div class="completed-actions">
+          <button class="action-btn primary" @click="router.push('/')">返回首页</button>
+          <button class="action-btn secondary" @click="router.push('/questions')">查看题库</button>
+        </div>
+      </div>
+    </div>
 
     <div v-else-if="!question" class="error">题目不存在</div>
 
@@ -226,7 +276,13 @@ function parseJsonField(field: string | null): string[] {
 
       <div v-if="reviewSubmitted" class="review-complete">
         <p>✅ 评分已提交</p>
-        <button class="next-btn" @click="nextQuestion">下一题</button>
+        <p v-if="submitResult?.nextReviewAt" class="next-review-time">
+          下次复习时间：{{ new Date(submitResult.nextReviewAt).toLocaleDateString() }}
+        </p>
+        <div class="review-complete-actions">
+          <button class="next-btn" @click="nextQuestion">下一题</button>
+          <button class="home-btn" @click="router.push('/')">返回首页</button>
+        </div>
       </div>
     </template>
   </div>
@@ -257,6 +313,65 @@ function parseJsonField(field: string | null): string[] {
   text-align: center;
   padding: 60px;
   color: #666;
+}
+
+.completed-state {
+  display: flex;
+  justify-content: center;
+  padding: 60px 0;
+}
+
+.completed-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 48px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.completed-card h2 {
+  font-size: 28px;
+  color: #2e7d32;
+  margin-bottom: 16px;
+}
+
+.completed-card p {
+  color: #666;
+  margin-bottom: 32px;
+}
+
+.completed-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.action-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn.primary {
+  background-color: #1976d2;
+  color: #fff;
+}
+
+.action-btn.primary:hover {
+  background-color: #1565c0;
+}
+
+.action-btn.secondary {
+  background-color: #fff;
+  color: #1976d2;
+  border: 1px solid #1976d2;
+}
+
+.action-btn.secondary:hover {
+  background-color: #e3f2fd;
 }
 
 .question-card {
@@ -493,7 +608,19 @@ function parseJsonField(field: string | null): string[] {
 .review-complete p {
   font-size: 18px;
   color: #2e7d32;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
+}
+
+.review-complete .next-review-time {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 24px;
+}
+
+.review-complete-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
 }
 
 .next-btn {
@@ -504,5 +631,23 @@ function parseJsonField(field: string | null): string[] {
   border-radius: 8px;
   font-size: 16px;
   cursor: pointer;
+}
+
+.next-btn:hover {
+  background-color: #1565c0;
+}
+
+.home-btn {
+  padding: 12px 32px;
+  background-color: #fff;
+  color: #1976d2;
+  border: 1px solid #1976d2;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.home-btn:hover {
+  background-color: #e3f2fd;
 }
 </style>

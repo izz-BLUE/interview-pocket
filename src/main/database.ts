@@ -76,6 +76,8 @@ function createTables(db: Database): void {
       next_review_date TEXT,
       ease_factor REAL DEFAULT 2.5,
       interval_days INTEGER DEFAULT 1,
+      wrong_count INTEGER DEFAULT 0,
+      mastery_score INTEGER DEFAULT 0,
       FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
     )
   `)

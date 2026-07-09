@@ -23,6 +23,11 @@ const router = createRouter({
       component: QuestionList
     },
     {
+      path: '/review',
+      name: 'reviewQueue',
+      component: ReviewPage
+    },
+    {
       path: '/review/:id',
       name: 'review',
       component: ReviewPage

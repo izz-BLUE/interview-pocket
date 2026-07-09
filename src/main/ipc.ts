@@ -340,10 +340,11 @@ function updateReviewProgress(questionId: number, score: number, nowStr: string)
 
   if (!existing) {
     // 首次复习
+    const wrongCount = score <= 2 ? 1 : 0
     runSql(`
-      INSERT INTO review_progress (question_id, review_count, last_review_date, next_review_date, ease_factor, interval_days)
-      VALUES (?, 1, ?, ?, 2.5, ?)
-    `, [questionId, todayStr, nextDateStr, interval])
+      INSERT INTO review_progress (question_id, review_count, last_review_date, next_review_date, ease_factor, interval_days, wrong_count, mastery_score)
+      VALUES (?, 1, ?, ?, 2.5, ?, ?, ?)
+    `, [questionId, todayStr, nextDateStr, interval, wrongCount, masteryScore])
   } else {
     // 更新
     const wrongCount = (existing.wrong_count || 0) + (score <= 2 ? 1 : 0)
@@ -354,9 +355,11 @@ function updateReviewProgress(questionId: number, score: number, nowStr: string)
       SET review_count = review_count + 1,
           last_review_date = ?,
           next_review_date = ?,
-          interval_days = ?
+          interval_days = ?,
+          wrong_count = ?,
+          mastery_score = ?
       WHERE question_id = ?
-    `, [todayStr, nextDateStr, interval, questionId])
+    `, [todayStr, nextDateStr, interval, wrongCount, newMasteryScore, questionId])
   }
 
   return nextDateStr
