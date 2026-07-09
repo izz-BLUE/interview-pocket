@@ -6,7 +6,8 @@ import type { ImportReport, QuestionSource, DeleteQuestionSourceResult } from '.
 
 const router = useRouter()
 const importing = ref(false)
-const errorResult = ref<string | null>(null)
+const importError = ref<string | null>(null)
+const deleteError = ref<string | null>(null)
 const report = ref<ImportReport | null>(null)
 
 const sources = ref<QuestionSource[]>([])
@@ -20,7 +21,7 @@ onMounted(() => {
 
 async function handleImport() {
   importing.value = true
-  errorResult.value = null
+  importError.value = null
   report.value = null
 
   try {
@@ -28,10 +29,10 @@ async function handleImport() {
     if (response.success && response.report) {
       report.value = response.report
     } else if (!response.success) {
-      errorResult.value = response.error || '导入失败'
+      importError.value = response.error || '导入失败'
     }
   } catch (error) {
-    errorResult.value = String(error)
+    importError.value = String(error)
   } finally {
     importing.value = false
   }
@@ -39,7 +40,7 @@ async function handleImport() {
 
 function continueImport() {
   report.value = null
-  errorResult.value = null
+  importError.value = null
 }
 
 function viewSourceQuestions() {
@@ -72,15 +73,16 @@ async function deleteSource(sourceFile: string) {
 
   deletingSource.value = sourceFile
   deleteResult.value = null
-  errorResult.value = null
+  deleteError.value = null
 
   try {
     const result = await api.deleteQuestionSource(sourceFile)
     if (result.success && result.data) {
       deleteResult.value = result.data
+      deleteError.value = null
       await loadSources()
     } else {
-      errorResult.value = result.error || '删除失败'
+      deleteError.value = result.error || '删除失败'
     }
   } finally {
     deletingSource.value = null
@@ -193,8 +195,8 @@ async function deleteSource(sourceFile: string) {
         {{ importing ? '导入中...' : '选择文件' }}
       </button>
 
-      <div v-if="errorResult" class="result error">
-        ❌ 导入失败：{{ errorResult }}
+      <div v-if="importError" class="result error">
+        ❌ 导入失败：{{ importError }}
       </div>
     </div>
 
@@ -211,8 +213,8 @@ async function deleteSource(sourceFile: string) {
         </div>
       </div>
 
-      <div v-if="errorResult" class="result error">
-        ❌ {{ errorResult }}
+      <div v-if="deleteError" class="result error">
+        ❌ {{ deleteError }}
       </div>
 
       <div v-if="loadingSources" class="source-loading">加载中...</div>

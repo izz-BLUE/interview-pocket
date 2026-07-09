@@ -286,7 +286,7 @@ export function registerIpcHandlers(): void {
   })
 
   // 删除题库来源（按 source_file 删除整份题库）
-  ipcMain.handle('deleteQuestionSource', async (_event, sourceFile: string) => {
+  ipcMain.handle('deleteQuestionSource', (_event, sourceFile: string) => {
     try {
       if (!sourceFile || !sourceFile.trim()) {
         return { success: false, error: 'sourceFile is required' }
@@ -295,64 +295,51 @@ export function registerIpcHandlers(): void {
       const trimmed = sourceFile.trim()
 
       // 1. 查询该来源所有题目 id
-      const questions: number[] = []
-      const qStmt = db.current!.prepare('SELECT id FROM questions WHERE source_file = ?')
-      qStmt.bind([trimmed])
-      while (qStmt.step()) {
-        const row = qStmt.getAsObject()
-        questions.push(row.id as number)
-      }
-      qStmt.free()
+      const rows = queryAll(
+        'SELECT id FROM questions WHERE source_file = ?',
+        [trimmed]
+      )
+      const ids = rows.map((row: any) => row.id)
 
-      if (questions.length === 0) {
+      if (ids.length === 0) {
         return {
           success: true,
           data: { sourceFile: trimmed, deletedQuestionCount: 0, deletedReviewRecordCount: 0, deletedProgressCount: 0 }
         }
       }
 
-      const placeholders = questions.map(() => '?').join(',')
+      const placeholders = ids.map(() => '?').join(',')
 
-      // 2. 删除 review_records
-      let deletedReviewRecordCount = 0
-      const rrCountStmt = db.current!.prepare(
-        `SELECT COUNT(*) as count FROM review_records WHERE question_id IN (${placeholders})`
+      // 2. 统计并删除 review_records
+      const rrCount = queryOne(
+        `SELECT COUNT(*) as count FROM review_records WHERE question_id IN (${placeholders})`,
+        ids
       )
-      rrCountStmt.bind(questions)
-      if (rrCountStmt.step()) {
-        deletedReviewRecordCount = rrCountStmt.getAsObject().count as number
-      }
-      rrCountStmt.free()
-      await runSql(
+      runSql(
         `DELETE FROM review_records WHERE question_id IN (${placeholders})`,
-        questions
+        ids
       )
 
-      // 3. 删除 review_progress
-      let deletedProgressCount = 0
-      const rpCountStmt = db.current!.prepare(
-        `SELECT COUNT(*) as count FROM review_progress WHERE question_id IN (${placeholders})`
+      // 3. 统计并删除 review_progress
+      const rpCount = queryOne(
+        `SELECT COUNT(*) as count FROM review_progress WHERE question_id IN (${placeholders})`,
+        ids
       )
-      rpCountStmt.bind(questions)
-      if (rpCountStmt.step()) {
-        deletedProgressCount = rpCountStmt.getAsObject().count as number
-      }
-      rpCountStmt.free()
-      await runSql(
+      runSql(
         `DELETE FROM review_progress WHERE question_id IN (${placeholders})`,
-        questions
+        ids
       )
 
       // 4. 删除 questions
-      await runSql('DELETE FROM questions WHERE source_file = ?', [trimmed])
+      runSql('DELETE FROM questions WHERE source_file = ?', [trimmed])
 
       return {
         success: true,
         data: {
           sourceFile: trimmed,
-          deletedQuestionCount: questions.length,
-          deletedReviewRecordCount,
-          deletedProgressCount
+          deletedQuestionCount: ids.length,
+          deletedReviewRecordCount: rrCount?.count || 0,
+          deletedProgressCount: rpCount?.count || 0
         }
       }
     } catch (error) {
