@@ -197,6 +197,49 @@ export function registerIpcHandlers(): void {
     }
   })
 
+  // 获取错题列表
+  ipcMain.handle('getWrongQuestions', () => {
+    try {
+      const questions = queryAll(`
+        SELECT
+          q.id,
+          q.title,
+          q.category,
+          q.source_file,
+          rp.wrong_count,
+          rp.mastery_score,
+          rp.last_review_date
+        FROM questions q
+        INNER JOIN review_progress rp ON q.id = rp.question_id
+        WHERE rp.wrong_count > 0
+        ORDER BY rp.wrong_count DESC, rp.last_review_date ASC, q.id ASC
+        LIMIT 100
+      `)
+      return { success: true, data: questions }
+    } catch (error) {
+      return safeError(error)
+    }
+  })
+
+  // 重置错题计数
+  ipcMain.handle('resetWrongCount', (_event, questionId: number) => {
+    try {
+      runSql(`
+        UPDATE review_progress
+        SET wrong_count = 0,
+            mastery_score = CASE
+              WHEN mastery_score < 80 THEN 80
+              ELSE mastery_score
+            END
+        WHERE question_id = ?
+      `, [questionId])
+      saveDatabase()
+      return { success: true, questionId }
+    } catch (error) {
+      return safeError(error)
+    }
+  })
+
   // 获取统计数据
   ipcMain.handle('getStats', () => {
     try {

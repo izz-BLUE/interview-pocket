@@ -50,6 +50,16 @@ export interface StatsData {
   todayDue: number
 }
 
+export interface WrongQuestionSummary {
+  id: number
+  title: string
+  category: string | null
+  source_file: string | null
+  wrong_count: number
+  mastery_score: number
+  last_review_date: string | null
+}
+
 export interface ElectronAPI {
   importMarkdownFile: (filePath?: string) => Promise<ApiResponse>
   listQuestions: (params?: { limit?: number; offset?: number }) => Promise<ApiResponse<QuestionSummary[]>>
@@ -58,6 +68,8 @@ export interface ElectronAPI {
   submitReview: (questionId: number, score: number) => Promise<ApiResponse>
   getStats: () => Promise<ApiResponse<StatsData>>
   getDueQuestions: () => Promise<ApiResponse<QuestionSummary[]>>
+  getWrongQuestions: () => Promise<ApiResponse<WrongQuestionSummary[]>>
+  resetWrongCount: (questionId: number) => Promise<ApiResponse>
 }
 
 declare global {

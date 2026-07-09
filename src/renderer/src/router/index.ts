@@ -28,6 +28,11 @@ const router = createRouter({
       component: ReviewPage
     },
     {
+      path: '/wrong-review',
+      name: 'wrongReview',
+      component: () => import('../views/WrongReviewPage.vue')
+    },
+    {
       path: '/review/:id',
       name: 'review',
       component: ReviewPage

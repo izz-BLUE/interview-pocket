@@ -62,6 +62,9 @@ function goToImport() {
         <button class="action-btn primary" @click="goToReview">
           📚 开始复习
         </button>
+        <button class="action-btn secondary" @click="router.push('/wrong-review')">
+          🧯 错题复习
+        </button>
         <button class="action-btn secondary" @click="goToImport">
           📥 导入题目
         </button>

@@ -35,6 +35,16 @@ const api = {
   // 获取今日待复习题目
   getDueQuestions: () => {
     return ipcRenderer.invoke('getDueQuestions')
+  },
+
+  // 获取错题列表
+  getWrongQuestions: () => {
+    return ipcRenderer.invoke('getWrongQuestions')
+  },
+
+  // 重置错题计数
+  resetWrongCount: (questionId: number) => {
+    return ipcRenderer.invoke('resetWrongCount', questionId)
   }
 }
 
