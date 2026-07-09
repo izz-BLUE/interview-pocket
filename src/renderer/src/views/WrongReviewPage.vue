@@ -135,6 +135,18 @@ function getWrongInfo(): WrongQuestionSummary | undefined {
   if (!question.value) return undefined
   return wrongQuestions.value.find((q) => q.id === question.value!.id)
 }
+
+// 解析 JSON 数组字符串，失败则返回 null
+function parseJsonArray(str: string | null): string[] | null {
+  if (!str) return null
+  try {
+    const parsed = JSON.parse(str)
+    if (Array.isArray(parsed)) return parsed
+    return null
+  } catch {
+    return null
+  }
+}
 </script>
 
 <template>
@@ -210,36 +222,42 @@ function getWrongInfo(): WrongQuestionSummary | undefined {
 
         <!-- 标准答案 -->
         <div v-if="activeTab === 'standard'" class="answer-content">
-          <div v-if="question.standard_answer" class="markdown-body" v-html="question.standard_answer"></div>
+          <pre v-if="question.standard_answer" class="answer-text">{{ question.standard_answer }}</pre>
           <div v-else class="no-answer">暂无标准答案</div>
         </div>
 
         <!-- 简短回答 -->
         <div v-if="activeTab === 'short'" class="answer-content">
-          <div class="markdown-body" v-html="question.short_answer"></div>
+          <pre class="answer-text">{{ question.short_answer }}</pre>
         </div>
 
         <!-- 深入回答 -->
         <div v-if="activeTab === 'deep'" class="answer-content">
-          <div class="markdown-body" v-html="question.deep_answer"></div>
+          <pre class="answer-text">{{ question.deep_answer }}</pre>
         </div>
 
         <!-- 记忆锚点 -->
         <div v-if="question.memory_point" class="memory-point">
           <h4>🎯 记忆锚点</h4>
-          <div class="markdown-body" v-html="question.memory_point"></div>
+          <pre class="answer-text">{{ question.memory_point }}</pre>
         </div>
 
         <!-- 追问点 -->
         <div v-if="question.follow_ups" class="follow-ups">
           <h4>❓ 可能追问</h4>
-          <div class="markdown-body" v-html="question.follow_ups"></div>
+          <ul v-if="parseJsonArray(question.follow_ups)">
+            <li v-for="(item, idx) in parseJsonArray(question.follow_ups)" :key="idx">{{ item }}</li>
+          </ul>
+          <pre v-else class="answer-text">{{ question.follow_ups }}</pre>
         </div>
 
         <!-- 注意事项 -->
         <div v-if="question.warnings" class="warnings">
           <h4>⚠️ 注意</h4>
-          <div class="markdown-body" v-html="question.warnings"></div>
+          <ul v-if="parseJsonArray(question.warnings)">
+            <li v-for="(item, idx) in parseJsonArray(question.warnings)" :key="idx">{{ item }}</li>
+          </ul>
+          <pre v-else class="answer-text">{{ question.warnings }}</pre>
         </div>
       </div>
 
@@ -439,45 +457,31 @@ function getWrongInfo(): WrongQuestionSummary | undefined {
   margin-bottom: 16px;
 }
 
-.markdown-body {
+.answer-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
   line-height: 1.7;
   color: #333;
-}
-
-.markdown-body :deep(p) {
-  margin: 0 0 12px 0;
-}
-
-.markdown-body :deep(code) {
-  background: #f0f0f0;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 13px;
-}
-
-.markdown-body :deep(pre) {
-  background: #1e1e1e;
-  color: #d4d4d4;
-  padding: 16px;
-  border-radius: 6px;
-  overflow-x: auto;
-}
-
-.markdown-body :deep(pre code) {
-  background: none;
-  padding: 0;
-  color: inherit;
-}
-
-.markdown-body :deep(ul),
-.markdown-body :deep(ol) {
-  padding-left: 20px;
-  margin: 8px 0;
 }
 
 .no-answer {
   color: #999;
   font-style: italic;
+}
+
+.follow-ups ul,
+.warnings ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.follow-ups li,
+.warnings li {
+  margin-bottom: 6px;
+  line-height: 1.6;
 }
 
 .memory-point {

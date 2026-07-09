@@ -217,7 +217,8 @@ export function registerIpcHandlers(): void {
       `)
       return { success: true, data: questions }
     } catch (error) {
-      return safeError(error)
+      safeError('Get wrong questions failed:', error)
+      return { success: false, error: String(error) }
     }
   })
 
@@ -233,10 +234,10 @@ export function registerIpcHandlers(): void {
             END
         WHERE question_id = ?
       `, [questionId])
-      saveDatabase()
       return { success: true, questionId }
     } catch (error) {
-      return safeError(error)
+      safeError('Reset wrong count failed:', error)
+      return { success: false, error: String(error) }
     }
   })
 
