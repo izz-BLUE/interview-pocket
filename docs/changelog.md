@@ -42,3 +42,22 @@
 
 ### Notes
 - 本版本不新增 UI 功能，仅作为 V0.1.6 后的数据一致性清理版本。
+
+## v0.2.1-wrong-review
+
+### Added
+- 新增错题复习入口。
+- 新增错题复习页面。
+- 新增 getWrongQuestions IPC，用于查询 wrong_count > 0 的题目。
+- 新增 resetWrongCount IPC，用于将题目标记为已掌握并清零 wrong_count。
+- 支持错题按 wrong_count 降序复习。
+- 支持错题复习连续下一题。
+- 支持本轮错题复习完成状态。
+
+### Fixed
+- 修复错题复习 IPC 错误返回不规范的问题。
+- 移除错题页答案展示中的 v-html，改为普通文本展示。
+- 移除 resetWrongCount 中多余的 saveDatabase 调用。
+
+### Notes
+- 本版本不涉及 AI 接入、云同步、EXE 打包、系统托盘或全局快捷键。
