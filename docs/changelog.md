@@ -83,3 +83,19 @@
 - 突击模式为纯浏览模式，不写入 review_records。
 - 突击模式不更新 review_progress。
 - 突击模式不会影响今日待复习、今日已复习、wrong_count 或 mastery_score。
+
+## v0.2.3-source-filter
+
+### Added
+- 题库列表页新增来源筛选下拉。
+- 支持按 source_file 查看题目。
+- 搜索题目时支持按当前来源过滤。
+- 题库页新增当前来源和结果数量提示。
+
+### Changed
+- listQuestions 支持 sourceFile 参数。
+- searchQuestions 支持 sourceFile 参数，并在主进程数据层过滤来源。
+
+### Notes
+- 本版本不影响普通复习、错题复习和突击模式。
+- 本版本不新增数据库表。
