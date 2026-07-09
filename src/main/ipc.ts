@@ -45,10 +45,41 @@ export function registerIpcHandlers(): void {
         VALUES (?, 0, datetime('now'))
       `
 
-      let count = 0
+      let insertedCount = 0
       let duplicatedCount = 0
+      const insertedQuestionIds: number[] = []
+      const duplicatedQuestions: Array<{ title: string; category: string | null }> = []
+      const noAnswerQuestions: Array<{ title: string; category: string | null }> = []
+
+      // 统计答案解析情况
+      let standardAnswerCount = 0
+      let shortAnswerCount = 0
+      let deepAnswerCount = 0
+      let memoryPointCount = 0
+      let followUpCount = 0
+      let warningCount = 0
 
       for (const q of parsedQuestions) {
+        // 统计答案字段
+        if (q.standard_answer) standardAnswerCount++
+        if (q.short_answer) shortAnswerCount++
+        if (q.deep_answer) deepAnswerCount++
+        if (q.memory_point) memoryPointCount++
+        if (Array.isArray(q.follow_ups) && q.follow_ups.length > 0) followUpCount++
+        if (Array.isArray(q.warnings) && q.warnings.length > 0) warningCount++
+
+        // 检查疑似缺答案
+        const hasAnyAnswer =
+          !!q.standard_answer ||
+          !!q.short_answer ||
+          !!q.deep_answer ||
+          !!q.memory_point ||
+          (!!q.raw_markdown && q.raw_markdown.trim().length > 30)
+
+        if (!hasAnyAnswer && noAnswerQuestions.length < 30) {
+          noAnswerQuestions.push({ title: q.title, category: q.category || null })
+        }
+
         // 检查是否已存在相同题目（source_file + title）
         const existing = queryOne(
           'SELECT id FROM questions WHERE source_file = ? AND title = ?',
@@ -57,6 +88,9 @@ export function registerIpcHandlers(): void {
 
         if (existing) {
           duplicatedCount++
+          if (duplicatedQuestions.length < 20) {
+            duplicatedQuestions.push({ title: q.title, category: q.category || null })
+          }
           continue
         }
 
@@ -82,6 +116,8 @@ export function registerIpcHandlers(): void {
         )
 
         if (insertedQuestion) {
+          insertedQuestionIds.push(insertedQuestion.id)
+
           // 检查是否已有 review_progress 记录
           const existingProgress = queryOne(
             'SELECT id FROM review_progress WHERE question_id = ?',
@@ -94,10 +130,32 @@ export function registerIpcHandlers(): void {
           }
         }
 
-        count++
+        insertedCount++
       }
 
-      return { success: true, count, duplicatedCount }
+      return {
+        success: true,
+        count: insertedCount,
+        duplicatedCount,
+        report: {
+          sourceFile: fileName,
+          parsedCount: parsedQuestions.length,
+          insertedCount,
+          duplicatedCount,
+          updatedCount: 0,
+          answerStats: {
+            standardAnswerCount,
+            shortAnswerCount,
+            deepAnswerCount,
+            memoryPointCount,
+            followUpCount,
+            warningCount
+          },
+          noAnswerQuestions,
+          duplicatedQuestions,
+          insertedQuestionIds
+        }
+      }
     } catch (error) {
       safeError('Import failed:', error)
       return { success: false, error: String(error) }

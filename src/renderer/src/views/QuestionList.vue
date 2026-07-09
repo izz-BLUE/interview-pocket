@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
 import type { QuestionSource } from '../../../preload/index.d'
 
@@ -25,6 +25,7 @@ interface QuestionSummary {
 }
 
 const router = useRouter()
+const route = useRoute()
 const questions = ref<(QuestionSummary | SearchResult)[]>([])
 const loading = ref(true)
 const searchKeyword = ref('')
@@ -34,9 +35,14 @@ const isSearchMode = ref(false)
 const sources = ref<QuestionSource[]>([])
 const selectedSource = ref('ALL')
 
-onMounted(() => {
-  loadSources()
-  loadQuestions()
+onMounted(async () => {
+  // 从 query 参数读取来源筛选
+  const querySource = route.query.sourceFile
+  if (querySource && typeof querySource === 'string') {
+    selectedSource.value = querySource
+  }
+  await loadSources()
+  await loadQuestions()
 })
 
 async function loadSources() {

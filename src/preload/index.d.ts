@@ -63,6 +63,31 @@ export interface CramQuestionSummary {
   memory_point: string | null
 }
 
+export interface ImportReport {
+  sourceFile: string
+  parsedCount: number
+  insertedCount: number
+  duplicatedCount: number
+  updatedCount: number
+  answerStats: {
+    standardAnswerCount: number
+    shortAnswerCount: number
+    deepAnswerCount: number
+    memoryPointCount: number
+    followUpCount: number
+    warningCount: number
+  }
+  noAnswerQuestions: Array<{
+    title: string
+    category: string | null
+  }>
+  duplicatedQuestions: Array<{
+    title: string
+    category: string | null
+  }>
+  insertedQuestionIds: number[]
+}
+
 export interface WrongQuestionSummary {
   id: number
   title: string
