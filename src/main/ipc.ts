@@ -285,6 +285,82 @@ export function registerIpcHandlers(): void {
     }
   })
 
+  // 删除题库来源（按 source_file 删除整份题库）
+  ipcMain.handle('deleteQuestionSource', async (_event, sourceFile: string) => {
+    try {
+      if (!sourceFile || !sourceFile.trim()) {
+        return { success: false, error: 'sourceFile is required' }
+      }
+
+      const trimmed = sourceFile.trim()
+
+      // 1. 查询该来源所有题目 id
+      const questions: number[] = []
+      const qStmt = db.current!.prepare('SELECT id FROM questions WHERE source_file = ?')
+      qStmt.bind([trimmed])
+      while (qStmt.step()) {
+        const row = qStmt.getAsObject()
+        questions.push(row.id as number)
+      }
+      qStmt.free()
+
+      if (questions.length === 0) {
+        return {
+          success: true,
+          data: { sourceFile: trimmed, deletedQuestionCount: 0, deletedReviewRecordCount: 0, deletedProgressCount: 0 }
+        }
+      }
+
+      const placeholders = questions.map(() => '?').join(',')
+
+      // 2. 删除 review_records
+      let deletedReviewRecordCount = 0
+      const rrCountStmt = db.current!.prepare(
+        `SELECT COUNT(*) as count FROM review_records WHERE question_id IN (${placeholders})`
+      )
+      rrCountStmt.bind(questions)
+      if (rrCountStmt.step()) {
+        deletedReviewRecordCount = rrCountStmt.getAsObject().count as number
+      }
+      rrCountStmt.free()
+      await runSql(
+        `DELETE FROM review_records WHERE question_id IN (${placeholders})`,
+        questions
+      )
+
+      // 3. 删除 review_progress
+      let deletedProgressCount = 0
+      const rpCountStmt = db.current!.prepare(
+        `SELECT COUNT(*) as count FROM review_progress WHERE question_id IN (${placeholders})`
+      )
+      rpCountStmt.bind(questions)
+      if (rpCountStmt.step()) {
+        deletedProgressCount = rpCountStmt.getAsObject().count as number
+      }
+      rpCountStmt.free()
+      await runSql(
+        `DELETE FROM review_progress WHERE question_id IN (${placeholders})`,
+        questions
+      )
+
+      // 4. 删除 questions
+      await runSql('DELETE FROM questions WHERE source_file = ?', [trimmed])
+
+      return {
+        success: true,
+        data: {
+          sourceFile: trimmed,
+          deletedQuestionCount: questions.length,
+          deletedReviewRecordCount,
+          deletedProgressCount
+        }
+      }
+    } catch (error) {
+      safeError('Delete question source failed:', error)
+      return { success: false, error: String(error) }
+    }
+  })
+
   // 获取突击模式题目列表
   ipcMain.handle('getCramQuestions', (_event, params?: { sourceFile?: string | null; limit?: number }) => {
     try {

@@ -127,6 +127,13 @@ export interface WrongQuestionSummary {
   last_review_date: string | null
 }
 
+export interface DeleteQuestionSourceResult {
+  sourceFile: string
+  deletedQuestionCount: number
+  deletedReviewRecordCount: number
+  deletedProgressCount: number
+}
+
 export interface ElectronAPI {
   importMarkdownFile: (filePath?: string) => Promise<ApiResponse>
   listQuestions: (params?: { limit?: number; offset?: number; sourceFile?: string | null }) => Promise<ApiResponse<QuestionSummary[]>>
@@ -140,6 +147,7 @@ export interface ElectronAPI {
   getWrongQuestions: () => Promise<ApiResponse<WrongQuestionSummary[]>>
   resetWrongCount: (questionId: number) => Promise<ApiResponse>
   getQuestionReviewInfo: (questionId: number) => Promise<ApiResponse<QuestionReviewInfo>>
+  deleteQuestionSource: (sourceFile: string) => Promise<ApiResponse<DeleteQuestionSourceResult>>
 }
 
 declare global {

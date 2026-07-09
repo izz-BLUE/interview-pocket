@@ -60,6 +60,11 @@ const api = {
   // 获取单题复习信息
   getQuestionReviewInfo: (questionId: number) => {
     return ipcRenderer.invoke('getQuestionReviewInfo', questionId)
+  },
+
+  // 删除题库来源
+  deleteQuestionSource: (sourceFile: string) => {
+    return ipcRenderer.invoke('deleteQuestionSource', sourceFile)
   }
 }
 

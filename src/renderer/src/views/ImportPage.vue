@@ -1,13 +1,22 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
-import type { ImportReport } from '../../../preload/index.d'
+import type { ImportReport, QuestionSource, DeleteQuestionSourceResult } from '../../../preload/index.d'
 
 const router = useRouter()
 const importing = ref(false)
 const errorResult = ref<string | null>(null)
 const report = ref<ImportReport | null>(null)
+
+const sources = ref<QuestionSource[]>([])
+const loadingSources = ref(false)
+const deletingSource = ref<string | null>(null)
+const deleteResult = ref<DeleteQuestionSourceResult | null>(null)
+
+onMounted(() => {
+  loadSources()
+})
 
 async function handleImport() {
   importing.value = true
@@ -36,6 +45,45 @@ function continueImport() {
 function viewSourceQuestions() {
   if (report.value) {
     router.push({ path: '/questions', query: { sourceFile: report.value.sourceFile } })
+  }
+}
+
+async function loadSources() {
+  loadingSources.value = true
+  try {
+    const result = await api.getQuestionSources()
+    if (result.success && result.data) {
+      sources.value = result.data
+    }
+  } finally {
+    loadingSources.value = false
+  }
+}
+
+async function deleteSource(sourceFile: string) {
+  const source = sources.value.find(s => s.source_file === sourceFile)
+  const count = source?.count ?? 0
+
+  const confirmed = window.confirm(
+    `确认删除题库来源「${sourceFile}」吗？\n\n将删除 ${count} 道题目，以及对应的复习记录和复习进度。\n此操作不可撤销。`
+  )
+
+  if (!confirmed) return
+
+  deletingSource.value = sourceFile
+  deleteResult.value = null
+  errorResult.value = null
+
+  try {
+    const result = await api.deleteQuestionSource(sourceFile)
+    if (result.success && result.data) {
+      deleteResult.value = result.data
+      await loadSources()
+    } else {
+      errorResult.value = result.error || '删除失败'
+    }
+  } finally {
+    deletingSource.value = null
   }
 }
 </script>
@@ -147,6 +195,44 @@ function viewSourceQuestions() {
 
       <div v-if="errorResult" class="result error">
         ❌ 导入失败：{{ errorResult }}
+      </div>
+    </div>
+
+    <!-- 题库来源管理 -->
+    <div class="source-section">
+      <h3>📚 题库来源管理</h3>
+
+      <div v-if="deleteResult" class="delete-report">
+        <p class="delete-report-title">✅ 已删除来源：{{ deleteResult.sourceFile }}</p>
+        <div class="delete-stats">
+          <span>删除题目：{{ deleteResult.deletedQuestionCount }}</span>
+          <span>删除复习记录：{{ deleteResult.deletedReviewRecordCount }}</span>
+          <span>删除复习进度：{{ deleteResult.deletedProgressCount }}</span>
+        </div>
+      </div>
+
+      <div v-if="errorResult" class="result error">
+        ❌ {{ errorResult }}
+      </div>
+
+      <div v-if="loadingSources" class="source-loading">加载中...</div>
+
+      <div v-else-if="sources.length === 0" class="source-empty">暂无题库来源。</div>
+
+      <div v-else class="source-list">
+        <div v-for="s in sources" :key="s.source_file" class="source-item">
+          <div class="source-info">
+            <span class="source-name">{{ s.source_file }}</span>
+            <span class="source-count">{{ s.count }} 道题</span>
+          </div>
+          <button
+            class="delete-btn"
+            :disabled="deletingSource === s.source_file"
+            @click="deleteSource(s.source_file)"
+          >
+            {{ deletingSource === s.source_file ? '删除中...' : '删除' }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -362,6 +448,106 @@ h2 {
 
 .action-btn.secondary:hover {
   background-color: #e3f2fd;
+}
+
+/* 题库来源管理 */
+.source-section {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 24px;
+}
+
+.source-section h3 {
+  margin-bottom: 16px;
+  color: #333;
+}
+
+.source-loading,
+.source-empty {
+  color: #999;
+  font-size: 14px;
+  padding: 12px 0;
+}
+
+.source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.source-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+}
+
+.source-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.source-name {
+  font-size: 14px;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-count {
+  font-size: 12px;
+  color: #999;
+  white-space: nowrap;
+}
+
+.delete-btn {
+  padding: 6px 16px;
+  background-color: #fff;
+  color: #c62828;
+  border: 1px solid #c62828;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background-color: #ffebee;
+}
+
+.delete-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.delete-report {
+  background-color: #e8f5e9;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.delete-report-title {
+  font-weight: 600;
+  color: #2e7d32;
+  margin-bottom: 8px;
+}
+
+.delete-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: #555;
+  flex-wrap: wrap;
 }
 
 .tips {
