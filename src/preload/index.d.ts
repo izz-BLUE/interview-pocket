@@ -50,6 +50,19 @@ export interface StatsData {
   todayDue: number
 }
 
+export interface QuestionSource {
+  source_file: string
+  count: number
+}
+
+export interface CramQuestionSummary {
+  id: number
+  title: string
+  category: string | null
+  source_file: string | null
+  memory_point: string | null
+}
+
 export interface WrongQuestionSummary {
   id: number
   title: string
@@ -68,6 +81,8 @@ export interface ElectronAPI {
   submitReview: (questionId: number, score: number) => Promise<ApiResponse>
   getStats: () => Promise<ApiResponse<StatsData>>
   getDueQuestions: () => Promise<ApiResponse<QuestionSummary[]>>
+  getQuestionSources: () => Promise<ApiResponse<QuestionSource[]>>
+  getCramQuestions: (params?: { sourceFile?: string | null; limit?: number }) => Promise<ApiResponse<CramQuestionSummary[]>>
   getWrongQuestions: () => Promise<ApiResponse<WrongQuestionSummary[]>>
   resetWrongCount: (questionId: number) => Promise<ApiResponse>
 }

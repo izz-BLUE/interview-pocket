@@ -37,6 +37,16 @@ const api = {
     return ipcRenderer.invoke('getDueQuestions')
   },
 
+  // 获取题库来源列表
+  getQuestionSources: () => {
+    return ipcRenderer.invoke('getQuestionSources')
+  },
+
+  // 获取突击模式题目列表
+  getCramQuestions: (params?: { sourceFile?: string | null; limit?: number }) => {
+    return ipcRenderer.invoke('getCramQuestions', params)
+  },
+
   // 获取错题列表
   getWrongQuestions: () => {
     return ipcRenderer.invoke('getWrongQuestions')

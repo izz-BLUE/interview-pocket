@@ -33,6 +33,11 @@ const router = createRouter({
       component: () => import('../views/WrongReviewPage.vue')
     },
     {
+      path: '/cram',
+      name: 'cramMode',
+      component: () => import('../views/CramModePage.vue')
+    },
+    {
       path: '/review/:id',
       name: 'review',
       component: ReviewPage

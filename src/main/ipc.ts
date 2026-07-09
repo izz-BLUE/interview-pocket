@@ -197,6 +197,42 @@ export function registerIpcHandlers(): void {
     }
   })
 
+  // 获取题库来源列表
+  ipcMain.handle('getQuestionSources', () => {
+    try {
+      const sources = queryAll(`
+        SELECT source_file, COUNT(*) as count
+        FROM questions
+        WHERE source_file IS NOT NULL AND source_file != ''
+        GROUP BY source_file
+        ORDER BY source_file ASC
+      `)
+      return { success: true, data: sources }
+    } catch (error) {
+      safeError('Get question sources failed:', error)
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // 获取突击模式题目列表
+  ipcMain.handle('getCramQuestions', (_event, params?: { sourceFile?: string | null; limit?: number }) => {
+    try {
+      const sourceFile = params?.sourceFile ?? null
+      const limit = params?.limit ?? 200
+      const questions = queryAll(`
+        SELECT id, title, category, source_file, memory_point
+        FROM questions
+        WHERE (? IS NULL OR source_file = ?)
+        ORDER BY id ASC
+        LIMIT ?
+      `, [sourceFile, sourceFile, limit])
+      return { success: true, data: questions }
+    } catch (error) {
+      safeError('Get cram questions failed:', error)
+      return { success: false, error: String(error) }
+    }
+  })
+
   // 获取错题列表
   ipcMain.handle('getWrongQuestions', () => {
     try {
