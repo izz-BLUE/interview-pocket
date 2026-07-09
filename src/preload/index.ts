@@ -8,12 +8,12 @@ const api = {
   },
 
   // 获取题目列表
-  listQuestions: (params?: { limit?: number; offset?: number; sourceFile?: string | null }) => {
+  listQuestions: (params?: { limit?: number; offset?: number; sourceFile?: string | null; reviewStatus?: string }) => {
     return ipcRenderer.invoke('listQuestions', params)
   },
 
   // 搜索题目
-  searchQuestions: (keyword: string, params?: { sourceFile?: string | null }) => {
+  searchQuestions: (keyword: string, params?: { sourceFile?: string | null; reviewStatus?: string }) => {
     return ipcRenderer.invoke('searchQuestions', keyword, params)
   },
 

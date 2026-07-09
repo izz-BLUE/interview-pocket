@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
-import type { QuestionSource, QuestionSummary, SearchResult } from '../../../preload/index.d'
+import type { QuestionSource, QuestionSummary, SearchResult, ReviewStatus } from '../../../preload/index.d'
 
 const router = useRouter()
 const route = useRoute()
@@ -14,6 +14,16 @@ const isSearchMode = ref(false)
 
 const sources = ref<QuestionSource[]>([])
 const selectedSource = ref('ALL')
+
+const selectedReviewStatus = ref<ReviewStatus>('ALL')
+const reviewStatusOptions: Array<{ value: ReviewStatus; label: string }> = [
+  { value: 'ALL', label: '全部状态' },
+  { value: 'UNREVIEWED', label: '未复习' },
+  { value: 'REVIEWED', label: '已复习' },
+  { value: 'WRONG', label: '错题' },
+  { value: 'LOW_MASTERY', label: '低掌握' },
+  { value: 'MASTERED', label: '已掌握' }
+]
 
 onMounted(async () => {
   // 从 query 参数读取来源筛选
@@ -40,8 +50,9 @@ async function loadQuestions() {
   loading.value = true
   isSearchMode.value = false
   const sourceFile = selectedSource.value === 'ALL' ? null : selectedSource.value
+  const reviewStatus = selectedReviewStatus.value
   try {
-    const result = await api.listQuestions({ limit: 500, offset: 0, sourceFile })
+    const result = await api.listQuestions({ limit: 500, offset: 0, sourceFile, reviewStatus })
     if (result.success && result.data) {
       questions.value = result.data
       total.value = result.total || 0
@@ -62,8 +73,9 @@ async function handleSearch() {
   loading.value = true
   isSearchMode.value = true
   const sourceFile = selectedSource.value === 'ALL' ? null : selectedSource.value
+  const reviewStatus = selectedReviewStatus.value
   try {
-    const result = await api.searchQuestions(searchKeyword.value, { sourceFile })
+    const result = await api.searchQuestions(searchKeyword.value, { sourceFile, reviewStatus })
     if (result.success && result.data) {
       questions.value = result.data
       total.value = result.data.length
@@ -76,6 +88,14 @@ async function handleSearch() {
 }
 
 function onSourceChange() {
+  if (searchKeyword.value.trim()) {
+    handleSearch()
+  } else {
+    loadQuestions()
+  }
+}
+
+function onReviewStatusChange() {
   if (searchKeyword.value.trim()) {
     handleSearch()
   } else {
@@ -117,6 +137,10 @@ function getSourceLabel(): string {
   return selectedSource.value
 }
 
+function getReviewStatusLabel(): string {
+  return reviewStatusOptions.find(o => o.value === selectedReviewStatus.value)?.label || '全部状态'
+}
+
 function getMasteryClass(score: number): string {
   if (score < 40) return 'low'
   if (score < 70) return 'medium'
@@ -139,14 +163,25 @@ function getMasteryClass(score: number): string {
       <button v-if="isSearchMode" class="clear-btn" @click="clearSearch">清除</button>
     </div>
 
-    <div class="source-filter">
-      <label class="filter-label">来源筛选：</label>
-      <select v-model="selectedSource" @change="onSourceChange" class="source-select">
-        <option value="ALL">全部题库</option>
-        <option v-for="s in sources" :key="s.source_file" :value="s.source_file">
-          {{ s.source_file }}（{{ s.count }}）
-        </option>
-      </select>
+    <div class="filters-row">
+      <div class="source-filter">
+        <label class="filter-label">来源筛选：</label>
+        <select v-model="selectedSource" @change="onSourceChange" class="source-select">
+          <option value="ALL">全部题库</option>
+          <option v-for="s in sources" :key="s.source_file" :value="s.source_file">
+            {{ s.source_file }}（{{ s.count }}）
+          </option>
+        </select>
+      </div>
+
+      <div class="status-filter">
+        <label class="filter-label">复习状态：</label>
+        <select v-model="selectedReviewStatus" @change="onReviewStatusChange" class="status-select">
+          <option v-for="option in reviewStatusOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+      </div>
     </div>
 
     <div v-if="loading" class="loading">加载中...</div>
@@ -159,6 +194,7 @@ function getMasteryClass(score: number): string {
     <div v-else class="question-list">
       <div class="list-header">
         <span>当前来源：{{ getSourceLabel() }}</span>
+        <span>当前状态：{{ getReviewStatusLabel() }}</span>
         <span>{{ isSearchMode ? `找到 ${total} 道相关题目` : `共 ${total} 道题` }}</span>
       </div>
       <div v-if="isSearchMode" class="search-limit-hint">
@@ -264,11 +300,20 @@ h2 {
   background-color: #616161 !important;
 }
 
-.source-filter {
+.filters-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.source-filter,
+.status-filter {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 24px;
+  flex: 1;
+  min-width: 200px;
 }
 
 .filter-label {
@@ -277,7 +322,8 @@ h2 {
   white-space: nowrap;
 }
 
-.source-select {
+.source-select,
+.status-select {
   flex: 1;
   padding: 10px 12px;
   border: 1px solid #ddd;
@@ -289,7 +335,8 @@ h2 {
   cursor: pointer;
 }
 
-.source-select:focus {
+.source-select:focus,
+.status-select:focus {
   border-color: #1976d2;
 }
 

@@ -1,5 +1,13 @@
 import { queryAll } from './database'
 
+export type ReviewStatus =
+  | 'ALL'
+  | 'UNREVIEWED'
+  | 'REVIEWED'
+  | 'WRONG'
+  | 'LOW_MASTERY'
+  | 'MASTERED'
+
 export interface SearchResult {
   id: number
   title: string
@@ -20,8 +28,40 @@ export interface SearchResult {
 /**
  * 搜索题目，按相关性排序
  */
-export function searchQuestions(keyword: string, options?: { sourceFile?: string | null }): SearchResult[] {
+export function searchQuestions(
+  keyword: string,
+  options?: { sourceFile?: string | null; reviewStatus?: ReviewStatus }
+): SearchResult[] {
   const effectiveSource = (!options?.sourceFile || options.sourceFile === 'ALL') ? null : options.sourceFile
+  const reviewStatus = options?.reviewStatus ?? 'ALL'
+
+  const whereClauses = ['(? IS NULL OR q.source_file = ?)']
+  const queryParams: any[] = [effectiveSource, effectiveSource]
+
+  switch (reviewStatus) {
+    case 'UNREVIEWED':
+      whereClauses.push('COALESCE(rp.review_count, 0) = 0')
+      break
+    case 'REVIEWED':
+      whereClauses.push('COALESCE(rp.review_count, 0) > 0')
+      break
+    case 'WRONG':
+      whereClauses.push('COALESCE(rp.wrong_count, 0) > 0')
+      break
+    case 'LOW_MASTERY':
+      whereClauses.push('COALESCE(rp.review_count, 0) > 0')
+      whereClauses.push('COALESCE(rp.mastery_score, 0) < 60')
+      break
+    case 'MASTERED':
+      whereClauses.push('COALESCE(rp.review_count, 0) > 0')
+      whereClauses.push('COALESCE(rp.mastery_score, 0) >= 80')
+      break
+    case 'ALL':
+    default:
+      break
+  }
+
+  const whereSql = whereClauses.join(' AND ')
 
   // 1. 获取所有题目
   const allQuestions = queryAll(`
@@ -34,8 +74,8 @@ export function searchQuestions(keyword: string, options?: { sourceFile?: string
       rp.last_review_date
     FROM questions q
     LEFT JOIN review_progress rp ON q.id = rp.question_id
-    WHERE (? IS NULL OR q.source_file = ?)
-  `, [effectiveSource, effectiveSource])
+    WHERE ${whereSql}
+  `, queryParams)
 
   // 2. 处理搜索词
   const { originalKeyword, terms } = normalizeKeyword(keyword)

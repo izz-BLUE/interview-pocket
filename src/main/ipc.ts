@@ -163,12 +163,41 @@ export function registerIpcHandlers(): void {
   })
 
   // 获取题目列表
-  ipcMain.handle('listQuestions', (_event, params?: { limit?: number; offset?: number; sourceFile?: string | null }) => {
+  ipcMain.handle('listQuestions', (_event, params?: { limit?: number; offset?: number; sourceFile?: string | null; reviewStatus?: string }) => {
     try {
       const limit = Math.min(Math.max(Number(params?.limit ?? 500) || 500, 1), 500)
       const offset = Math.max(params?.offset ?? 0, 0)
       const sourceFile = params?.sourceFile ?? null
       const effectiveSource = (!sourceFile || sourceFile === 'ALL') ? null : sourceFile
+      const reviewStatus = params?.reviewStatus ?? 'ALL'
+
+      const whereClauses = ['(? IS NULL OR q.source_file = ?)']
+      const queryParams: any[] = [effectiveSource, effectiveSource]
+
+      switch (reviewStatus) {
+        case 'UNREVIEWED':
+          whereClauses.push('COALESCE(rp.review_count, 0) = 0')
+          break
+        case 'REVIEWED':
+          whereClauses.push('COALESCE(rp.review_count, 0) > 0')
+          break
+        case 'WRONG':
+          whereClauses.push('COALESCE(rp.wrong_count, 0) > 0')
+          break
+        case 'LOW_MASTERY':
+          whereClauses.push('COALESCE(rp.review_count, 0) > 0')
+          whereClauses.push('COALESCE(rp.mastery_score, 0) < 60')
+          break
+        case 'MASTERED':
+          whereClauses.push('COALESCE(rp.review_count, 0) > 0')
+          whereClauses.push('COALESCE(rp.mastery_score, 0) >= 80')
+          break
+        case 'ALL':
+        default:
+          break
+      }
+
+      const whereSql = whereClauses.join(' AND ')
 
       const questions = queryAll(`
         SELECT
@@ -179,16 +208,17 @@ export function registerIpcHandlers(): void {
           rp.last_review_date
         FROM questions q
         LEFT JOIN review_progress rp ON q.id = rp.question_id
-        WHERE (? IS NULL OR q.source_file = ?)
+        WHERE ${whereSql}
         ORDER BY q.created_at DESC
         LIMIT ? OFFSET ?
-      `, [effectiveSource, effectiveSource, limit, offset])
+      `, [...queryParams, limit, offset])
 
       const totalResult = queryOne(`
         SELECT COUNT(*) as count
-        FROM questions
-        WHERE (? IS NULL OR source_file = ?)
-      `, [effectiveSource, effectiveSource])
+        FROM questions q
+        LEFT JOIN review_progress rp ON q.id = rp.question_id
+        WHERE ${whereSql}
+      `, queryParams)
 
       return { success: true, data: questions, total: totalResult?.count || 0 }
     } catch (error) {
@@ -198,9 +228,9 @@ export function registerIpcHandlers(): void {
   })
 
   // 搜索题目（按相关性排序）
-  ipcMain.handle('searchQuestions', (_event, keyword: string, params?: { sourceFile?: string | null }) => {
+  ipcMain.handle('searchQuestions', (_event, keyword: string, params?: { sourceFile?: string | null; reviewStatus?: string }) => {
     try {
-      const results = searchQuestions(keyword, { sourceFile: params?.sourceFile })
+      const results = searchQuestions(keyword, { sourceFile: params?.sourceFile, reviewStatus: params?.reviewStatus as any })
       return { success: true, data: results }
     } catch (error) {
       safeError('Search questions failed:', error)

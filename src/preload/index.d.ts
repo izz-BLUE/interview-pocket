@@ -6,6 +6,14 @@ export interface ApiResponse<T = any> {
   total?: number
 }
 
+export type ReviewStatus =
+  | 'ALL'
+  | 'UNREVIEWED'
+  | 'REVIEWED'
+  | 'WRONG'
+  | 'LOW_MASTERY'
+  | 'MASTERED'
+
 export interface QuestionSummary {
   id: number
   title: string
@@ -136,8 +144,8 @@ export interface DeleteQuestionSourceResult {
 
 export interface ElectronAPI {
   importMarkdownFile: (filePath?: string) => Promise<ApiResponse>
-  listQuestions: (params?: { limit?: number; offset?: number; sourceFile?: string | null }) => Promise<ApiResponse<QuestionSummary[]>>
-  searchQuestions: (keyword: string, params?: { sourceFile?: string | null }) => Promise<ApiResponse<SearchResult[]>>
+  listQuestions: (params?: { limit?: number; offset?: number; sourceFile?: string | null; reviewStatus?: ReviewStatus }) => Promise<ApiResponse<QuestionSummary[]>>
+  searchQuestions: (keyword: string, params?: { sourceFile?: string | null; reviewStatus?: ReviewStatus }) => Promise<ApiResponse<SearchResult[]>>
   getQuestionById: (id: number) => Promise<ApiResponse<QuestionDetail>>
   submitReview: (questionId: number, score: number) => Promise<ApiResponse>
   getStats: () => Promise<ApiResponse<StatsData>>
