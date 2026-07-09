@@ -16,12 +16,15 @@ export interface SearchResult {
 /**
  * 搜索题目，按相关性排序
  */
-export function searchQuestions(keyword: string): SearchResult[] {
+export function searchQuestions(keyword: string, options?: { sourceFile?: string | null }): SearchResult[] {
+  const effectiveSource = (!options?.sourceFile || options.sourceFile === 'ALL') ? null : options.sourceFile
+
   // 1. 获取所有题目
   const allQuestions = queryAll(`
     SELECT id, title, category, source_file, created_at, standard_answer, short_answer, deep_answer, memory_point, raw_markdown
     FROM questions
-  `)
+    WHERE (? IS NULL OR source_file = ?)
+  `, [effectiveSource, effectiveSource])
 
   // 2. 处理搜索词
   const { originalKeyword, terms } = normalizeKeyword(keyword)

@@ -75,8 +75,8 @@ export interface WrongQuestionSummary {
 
 export interface ElectronAPI {
   importMarkdownFile: (filePath?: string) => Promise<ApiResponse>
-  listQuestions: (params?: { limit?: number; offset?: number }) => Promise<ApiResponse<QuestionSummary[]>>
-  searchQuestions: (keyword: string) => Promise<ApiResponse<SearchResult[]>>
+  listQuestions: (params?: { limit?: number; offset?: number; sourceFile?: string | null }) => Promise<ApiResponse<QuestionSummary[]>>
+  searchQuestions: (keyword: string, params?: { sourceFile?: string | null }) => Promise<ApiResponse<SearchResult[]>>
   getQuestionById: (id: number) => Promise<ApiResponse<QuestionDetail>>
   submitReview: (questionId: number, score: number) => Promise<ApiResponse>
   getStats: () => Promise<ApiResponse<StatsData>>

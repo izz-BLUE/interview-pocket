@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
+import type { QuestionSource } from '../../../preload/index.d'
 
 interface SearchResult {
   id: number
@@ -12,6 +13,7 @@ interface SearchResult {
   score: number
   matchField: 'title' | 'memory_point' | 'standard_answer' | 'raw_markdown'
   matchSnippet: string
+  matchedTerms?: string[]
 }
 
 interface QuestionSummary {
@@ -29,15 +31,31 @@ const searchKeyword = ref('')
 const total = ref(0)
 const isSearchMode = ref(false)
 
+const sources = ref<QuestionSource[]>([])
+const selectedSource = ref('ALL')
+
 onMounted(() => {
+  loadSources()
   loadQuestions()
 })
+
+async function loadSources() {
+  try {
+    const result = await api.getQuestionSources()
+    if (result.success && result.data) {
+      sources.value = result.data
+    }
+  } catch (error) {
+    console.error('Failed to load sources:', error)
+  }
+}
 
 async function loadQuestions() {
   loading.value = true
   isSearchMode.value = false
+  const sourceFile = selectedSource.value === 'ALL' ? null : selectedSource.value
   try {
-    const result = await api.listQuestions({ limit: 100, offset: 0 })
+    const result = await api.listQuestions({ limit: 100, offset: 0, sourceFile })
     if (result.success && result.data) {
       questions.value = result.data
       total.value = result.total || 0
@@ -57,8 +75,9 @@ async function handleSearch() {
 
   loading.value = true
   isSearchMode.value = true
+  const sourceFile = selectedSource.value === 'ALL' ? null : selectedSource.value
   try {
-    const result = await api.searchQuestions(searchKeyword.value)
+    const result = await api.searchQuestions(searchKeyword.value, { sourceFile })
     if (result.success && result.data) {
       questions.value = result.data
       total.value = result.data.length
@@ -68,6 +87,19 @@ async function handleSearch() {
   } finally {
     loading.value = false
   }
+}
+
+function onSourceChange() {
+  if (searchKeyword.value.trim()) {
+    handleSearch()
+  } else {
+    loadQuestions()
+  }
+}
+
+function clearSearch() {
+  searchKeyword.value = ''
+  loadQuestions()
 }
 
 function goToReview(id: number) {
@@ -93,6 +125,11 @@ function getMatchFieldLabel(field: string): string {
     default: return field
   }
 }
+
+function getSourceLabel(): string {
+  if (selectedSource.value === 'ALL') return '全部题库'
+  return selectedSource.value
+}
 </script>
 
 <template>
@@ -107,19 +144,30 @@ function getMatchFieldLabel(field: string): string {
         @keydown="handleKeydown"
       />
       <button @click="handleSearch">搜索</button>
-      <button v-if="isSearchMode" class="clear-btn" @click="loadQuestions(); searchKeyword = ''">清除</button>
+      <button v-if="isSearchMode" class="clear-btn" @click="clearSearch">清除</button>
+    </div>
+
+    <div class="source-filter">
+      <label class="filter-label">来源筛选：</label>
+      <select v-model="selectedSource" @change="onSourceChange" class="source-select">
+        <option value="ALL">全部题库</option>
+        <option v-for="s in sources" :key="s.source_file" :value="s.source_file">
+          {{ s.source_file }}（{{ s.count }}）
+        </option>
+      </select>
     </div>
 
     <div v-if="loading" class="loading">加载中...</div>
 
     <div v-else-if="questions.length === 0" class="empty">
-      <p>{{ isSearchMode ? '未找到匹配的题目' : '暂无题目' }}</p>
+      <p>{{ isSearchMode ? '未找到匹配的题目' : '当前筛选条件下暂无题目' }}</p>
       <button v-if="!isSearchMode" @click="router.push('/import')">去导入</button>
     </div>
 
     <div v-else class="question-list">
       <div class="list-header">
-        <span>{{ isSearchMode ? `找到 ${total} 道相关题目` : `共 ${total} 道题目` }}</span>
+        <span>当前来源：{{ getSourceLabel() }}</span>
+        <span>{{ isSearchMode ? `找到 ${total} 道相关题目` : `共 ${total} 道题` }}</span>
       </div>
 
       <div
@@ -160,7 +208,7 @@ h2 {
 .search-bar {
   display: flex;
   gap: 12px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .search-bar input {
@@ -200,6 +248,35 @@ h2 {
   background-color: #616161 !important;
 }
 
+.source-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.filter-label {
+  font-size: 14px;
+  color: #666;
+  white-space: nowrap;
+}
+
+.source-select {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #333;
+  background-color: #fff;
+  outline: none;
+  cursor: pointer;
+}
+
+.source-select:focus {
+  border-color: #1976d2;
+}
+
 .loading {
   text-align: center;
   padding: 40px;
@@ -229,6 +306,8 @@ h2 {
 }
 
 .list-header {
+  display: flex;
+  justify-content: space-between;
   margin-bottom: 16px;
   color: #666;
   font-size: 14px;

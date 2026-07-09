@@ -105,19 +105,26 @@ export function registerIpcHandlers(): void {
   })
 
   // 获取题目列表
-  ipcMain.handle('listQuestions', (_event, params?: { limit?: number; offset?: number }) => {
+  ipcMain.handle('listQuestions', (_event, params?: { limit?: number; offset?: number; sourceFile?: string | null }) => {
     try {
-      const limit = params?.limit || 100
-      const offset = params?.offset || 0
+      const limit = Math.min(Math.max(params?.limit ?? 100, 1), 500)
+      const offset = Math.max(params?.offset ?? 0, 0)
+      const sourceFile = params?.sourceFile ?? null
+      const effectiveSource = (!sourceFile || sourceFile === 'ALL') ? null : sourceFile
 
       const questions = queryAll(`
         SELECT id, title, category, source_file, created_at
         FROM questions
+        WHERE (? IS NULL OR source_file = ?)
         ORDER BY created_at DESC
         LIMIT ? OFFSET ?
-      `, [limit, offset])
+      `, [effectiveSource, effectiveSource, limit, offset])
 
-      const totalResult = queryOne('SELECT COUNT(*) as count FROM questions')
+      const totalResult = queryOne(`
+        SELECT COUNT(*) as count
+        FROM questions
+        WHERE (? IS NULL OR source_file = ?)
+      `, [effectiveSource, effectiveSource])
 
       return { success: true, data: questions, total: totalResult?.count || 0 }
     } catch (error) {
@@ -127,9 +134,9 @@ export function registerIpcHandlers(): void {
   })
 
   // 搜索题目（按相关性排序）
-  ipcMain.handle('searchQuestions', (_event, keyword: string) => {
+  ipcMain.handle('searchQuestions', (_event, keyword: string, params?: { sourceFile?: string | null }) => {
     try {
-      const results = searchQuestions(keyword)
+      const results = searchQuestions(keyword, { sourceFile: params?.sourceFile })
       return { success: true, data: results }
     } catch (error) {
       safeError('Search questions failed:', error)
