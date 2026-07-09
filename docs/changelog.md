@@ -209,3 +209,23 @@
 - 本版本不改变复习算法。
 - 本版本不影响错题复习、突击模式和导入报告。
 - 本版本用于增强 155 道以上本地题库的日常管理体验。
+
+---
+
+## v0.3.0-project-showcase
+
+### Added
+- 重写 README，增强项目定位、功能说明、技术栈和本地运行说明。
+- 新增架构说明文档 docs/architecture.md。
+- 新增面试讲解文档 docs/interview-notes.md。
+- 新增路线图文档 docs/roadmap.md。
+- 新增截图占位说明 docs/screenshots/README.md。
+
+### Changed
+- 明确项目定位为个人 GitHub 项目、本地自用工具和简历展示项目。
+- 明确当前功能边界和后续扩展方向。
+
+### Notes
+- 本版本不新增业务功能。
+- 本版本不修改数据库结构。
+- 本版本不涉及 Windows 打包、安装包、自动更新或发布流程。
