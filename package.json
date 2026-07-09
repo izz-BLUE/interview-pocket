@@ -1,0 +1,33 @@
+{
+  "name": "interview-pocket",
+  "version": "0.1.0",
+  "description": "Windows 桌面端面试复习工具",
+  "main": "./out/main/index.js",
+  "author": "饭团",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "naive-ui": "^2.40.3",
+    "remark-parse": "^11.0.0",
+    "sql.js": "^1.11.0",
+    "unified": "^11.0.5",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^3.0.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^5.0.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.5",
+    "vue-tsc": "^2.2.0"
+  }
+}
