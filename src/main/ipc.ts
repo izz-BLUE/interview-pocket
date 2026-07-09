@@ -171,10 +171,16 @@ export function registerIpcHandlers(): void {
       const effectiveSource = (!sourceFile || sourceFile === 'ALL') ? null : sourceFile
 
       const questions = queryAll(`
-        SELECT id, title, category, source_file, created_at
-        FROM questions
-        WHERE (? IS NULL OR source_file = ?)
-        ORDER BY created_at DESC
+        SELECT
+          q.id, q.title, q.category, q.source_file, q.created_at,
+          COALESCE(rp.mastery_score, 0) as mastery_score,
+          COALESCE(rp.wrong_count, 0) as wrong_count,
+          COALESCE(rp.review_count, 0) as review_count,
+          rp.last_review_date
+        FROM questions q
+        LEFT JOIN review_progress rp ON q.id = rp.question_id
+        WHERE (? IS NULL OR q.source_file = ?)
+        ORDER BY q.created_at DESC
         LIMIT ? OFFSET ?
       `, [effectiveSource, effectiveSource, limit, offset])
 
@@ -382,12 +388,24 @@ export function registerIpcHandlers(): void {
           )
       `, [todayStartStr, todayEndStr])
 
+      // 复习状态统计
+      const reviewedTotal = queryOne('SELECT COUNT(*) as count FROM review_progress WHERE review_count > 0')
+      const unreviewedTotal = queryOne('SELECT COUNT(*) as count FROM review_progress WHERE review_count = 0')
+      const wrongQuestionCount = queryOne('SELECT COUNT(*) as count FROM review_progress WHERE wrong_count > 0')
+      const lowMasteryCount = queryOne('SELECT COUNT(*) as count FROM review_progress WHERE review_count > 0 AND mastery_score < 60')
+      const avgMasteryReviewed = queryOne('SELECT AVG(mastery_score) as avg FROM review_progress WHERE review_count > 0')
+
       return {
         success: true,
         data: {
           total: totalQuestions?.count || 0,
           todayReviewed: todayReviewed?.count || 0,
-          todayDue: todayDue?.count || 0
+          todayDue: todayDue?.count || 0,
+          reviewedTotal: reviewedTotal?.count || 0,
+          unreviewedTotal: unreviewedTotal?.count || 0,
+          wrongQuestionCount: wrongQuestionCount?.count || 0,
+          lowMasteryCount: lowMasteryCount?.count || 0,
+          avgMasteryReviewed: Math.round(avgMasteryReviewed?.avg || 0)
         }
       }
     } catch (error) {
@@ -431,6 +449,30 @@ export function registerIpcHandlers(): void {
       return { success: true, data: questions }
     } catch (error) {
       safeError('Get due questions failed:', error)
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // 获取单题复习信息
+  ipcMain.handle('getQuestionReviewInfo', (_event, questionId: number) => {
+    try {
+      const progress = queryOne(`
+        SELECT review_count, wrong_count, mastery_score, last_review_date, next_review_date, interval_days
+        FROM review_progress
+        WHERE question_id = ?
+      `, [questionId])
+
+      const records = queryAll(`
+        SELECT id, score, review_date
+        FROM review_records
+        WHERE question_id = ?
+        ORDER BY review_date DESC
+        LIMIT 20
+      `, [questionId])
+
+      return { success: true, data: { progress: progress || null, records } }
+    } catch (error) {
+      safeError('Get question review info failed:', error)
       return { success: false, error: String(error) }
     }
   })

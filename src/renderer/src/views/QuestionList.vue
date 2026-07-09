@@ -2,27 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
-import type { QuestionSource } from '../../../preload/index.d'
-
-interface SearchResult {
-  id: number
-  title: string
-  category: string | null
-  source_file: string | null
-  created_at: string
-  score: number
-  matchField: 'title' | 'memory_point' | 'standard_answer' | 'raw_markdown'
-  matchSnippet: string
-  matchedTerms?: string[]
-}
-
-interface QuestionSummary {
-  id: number
-  title: string
-  category: string | null
-  source_file: string | null
-  created_at: string
-}
+import type { QuestionSource, QuestionSummary, SearchResult } from '../../../preload/index.d'
 
 const router = useRouter()
 const route = useRoute()
@@ -136,6 +116,12 @@ function getSourceLabel(): string {
   if (selectedSource.value === 'ALL') return '全部题库'
   return selectedSource.value
 }
+
+function getMasteryClass(score: number): string {
+  if (score < 40) return 'low'
+  if (score < 70) return 'medium'
+  return 'high'
+}
 </script>
 
 <template>
@@ -187,6 +173,27 @@ function getSourceLabel(): string {
           <span v-if="q.category" class="tag">{{ q.category }}</span>
           <span v-if="q.source_file" class="source">{{ q.source_file }}</span>
         </div>
+
+        <!-- 复习状态 -->
+        <div class="review-status">
+          <template v-if="(q.review_count ?? 0) > 0">
+            <div class="mastery-bar-wrapper">
+              <span class="mastery-label">掌握度</span>
+              <div class="mastery-bar">
+                <div
+                  class="mastery-fill"
+                  :class="getMasteryClass(q.mastery_score ?? 0)"
+                  :style="{ width: (q.mastery_score ?? 0) + '%' }"
+                ></div>
+              </div>
+              <span class="mastery-value">{{ q.mastery_score ?? 0 }}%</span>
+            </div>
+            <span class="status-tag">复习 {{ q.review_count ?? 0 }} 次</span>
+            <span v-if="(q.wrong_count ?? 0) > 0" class="status-tag warn">错题 {{ q.wrong_count }}</span>
+          </template>
+          <span v-else class="status-tag empty">未复习</span>
+        </div>
+
         <div v-if="isSearchResult(q)" class="match-info">
           <div class="match-tags">
             <span class="match-field">命中位置：{{ getMatchFieldLabel(q.matchField) }}</span>
@@ -360,6 +367,73 @@ h2 {
 }
 
 .source {
+  color: #999;
+}
+
+/* 复习状态 */
+.review-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.mastery-bar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mastery-label {
+  color: #999;
+}
+
+.mastery-bar {
+  width: 60px;
+  height: 6px;
+  background-color: #eee;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.mastery-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.mastery-fill.low {
+  background-color: #e53935;
+}
+
+.mastery-fill.medium {
+  background-color: #fb8c00;
+}
+
+.mastery-fill.high {
+  background-color: #43a047;
+}
+
+.mastery-value {
+  color: #666;
+  min-width: 32px;
+}
+
+.status-tag {
+  font-size: 11px;
+  color: #666;
+  background-color: #f5f5f5;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.status-tag.warn {
+  color: #e65100;
+  background-color: #fff3e0;
+}
+
+.status-tag.empty {
   color: #999;
 }
 

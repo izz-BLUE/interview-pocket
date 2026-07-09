@@ -55,6 +55,11 @@ const api = {
   // 重置错题计数
   resetWrongCount: (questionId: number) => {
     return ipcRenderer.invoke('resetWrongCount', questionId)
+  },
+
+  // 获取单题复习信息
+  getQuestionReviewInfo: (questionId: number) => {
+    return ipcRenderer.invoke('getQuestionReviewInfo', questionId)
   }
 }
 

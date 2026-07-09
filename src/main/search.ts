@@ -11,6 +11,10 @@ export interface SearchResult {
   matchSnippet: string
   matchedTerms: string[]
   matchRatio: number
+  mastery_score?: number
+  wrong_count?: number
+  review_count?: number
+  last_review_date?: string | null
 }
 
 /**
@@ -21,9 +25,16 @@ export function searchQuestions(keyword: string, options?: { sourceFile?: string
 
   // 1. 获取所有题目
   const allQuestions = queryAll(`
-    SELECT id, title, category, source_file, created_at, standard_answer, short_answer, deep_answer, memory_point, raw_markdown
-    FROM questions
-    WHERE (? IS NULL OR source_file = ?)
+    SELECT
+      q.id, q.title, q.category, q.source_file, q.created_at,
+      q.standard_answer, q.short_answer, q.deep_answer, q.memory_point, q.raw_markdown,
+      COALESCE(rp.mastery_score, 0) as mastery_score,
+      COALESCE(rp.wrong_count, 0) as wrong_count,
+      COALESCE(rp.review_count, 0) as review_count,
+      rp.last_review_date
+    FROM questions q
+    LEFT JOIN review_progress rp ON q.id = rp.question_id
+    WHERE (? IS NULL OR q.source_file = ?)
   `, [effectiveSource, effectiveSource])
 
   // 2. 处理搜索词
@@ -50,7 +61,11 @@ export function searchQuestions(keyword: string, options?: { sourceFile?: string
         matchField: scoreResult.matchField,
         matchSnippet: scoreResult.matchSnippet,
         matchedTerms: scoreResult.matchedTerms,
-        matchRatio: scoreResult.matchRatio
+        matchRatio: scoreResult.matchRatio,
+        mastery_score: q.mastery_score,
+        wrong_count: q.wrong_count,
+        review_count: q.review_count,
+        last_review_date: q.last_review_date
       })
     }
   }

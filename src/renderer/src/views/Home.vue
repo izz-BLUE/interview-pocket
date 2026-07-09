@@ -7,7 +7,12 @@ const router = useRouter()
 const stats = ref({
   total: 0,
   todayReviewed: 0,
-  todayDue: 0
+  todayDue: 0,
+  reviewedTotal: 0,
+  unreviewedTotal: 0,
+  wrongQuestionCount: 0,
+  lowMasteryCount: 0,
+  avgMasteryReviewed: 0
 })
 const loading = ref(true)
 
@@ -15,7 +20,7 @@ onMounted(async () => {
   try {
     const result = await api.getStats()
     if (result.success && result.data) {
-      stats.value = result.data
+      stats.value = result.data as any
     }
   } catch (error) {
     console.error('Failed to load stats:', error)
@@ -39,22 +44,51 @@ function goToImport() {
 
     <div v-if="loading" class="loading">加载中...</div>
 
-    <div v-else class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-value">{{ stats.total }}</div>
-        <div class="stat-label">总题数</div>
+    <template v-else>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">{{ stats.total }}</div>
+          <div class="stat-label">总题数</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-value">{{ stats.todayDue }}</div>
+          <div class="stat-label">今日待复习</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-value">{{ stats.todayReviewed }}</div>
+          <div class="stat-label">今日已复习</div>
+        </div>
       </div>
 
-      <div class="stat-card">
-        <div class="stat-value">{{ stats.todayDue }}</div>
-        <div class="stat-label">今日待复习</div>
-      </div>
+      <div class="stats-grid">
+        <div class="stat-card secondary">
+          <div class="stat-value">{{ stats.reviewedTotal }}</div>
+          <div class="stat-label">已复习题数</div>
+        </div>
 
-      <div class="stat-card">
-        <div class="stat-value">{{ stats.todayReviewed }}</div>
-        <div class="stat-label">今日已复习</div>
+        <div class="stat-card secondary">
+          <div class="stat-value">{{ stats.unreviewedTotal }}</div>
+          <div class="stat-label">未复习题数</div>
+        </div>
+
+        <div class="stat-card secondary">
+          <div class="stat-value" :class="{ warn: stats.wrongQuestionCount > 0 }">{{ stats.wrongQuestionCount }}</div>
+          <div class="stat-label">错题数</div>
+        </div>
+
+        <div class="stat-card secondary">
+          <div class="stat-value" :class="{ warn: stats.lowMasteryCount > 0 }">{{ stats.lowMasteryCount }}</div>
+          <div class="stat-label">低掌握题数</div>
+        </div>
+
+        <div class="stat-card secondary">
+          <div class="stat-value">{{ stats.avgMasteryReviewed }}%</div>
+          <div class="stat-label">平均掌握度（已复习）</div>
+        </div>
       </div>
-    </div>
+    </template>
 
     <div class="quick-actions">
       <h3>快速操作</h3>
@@ -94,28 +128,42 @@ h2 {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  margin-bottom: 40px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
 .stat-card {
   background: #fff;
   border-radius: 8px;
-  padding: 24px;
+  padding: 20px;
   text-align: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+.stat-card.secondary {
+  background-color: #f9f9f9;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
 .stat-value {
-  font-size: 36px;
+  font-size: 32px;
   font-weight: bold;
   color: #1976d2;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+}
+
+.stat-card.secondary .stat-value {
+  font-size: 24px;
+  color: #333;
+}
+
+.stat-value.warn {
+  color: #e65100;
 }
 
 .stat-label {
-  font-size: 14px;
+  font-size: 13px;
   color: #666;
 }
 

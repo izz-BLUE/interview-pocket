@@ -12,6 +12,10 @@ export interface QuestionSummary {
   category: string | null
   source_file: string | null
   created_at: string
+  mastery_score?: number
+  wrong_count?: number
+  review_count?: number
+  last_review_date?: string | null
 }
 
 export interface SearchResult {
@@ -25,6 +29,10 @@ export interface SearchResult {
   matchSnippet: string
   matchedTerms: string[]
   matchRatio: number
+  mastery_score?: number
+  wrong_count?: number
+  review_count?: number
+  last_review_date?: string | null
 }
 
 export interface QuestionDetail {
@@ -48,6 +56,11 @@ export interface StatsData {
   total: number
   todayReviewed: number
   todayDue: number
+  reviewedTotal?: number
+  unreviewedTotal?: number
+  wrongQuestionCount?: number
+  lowMasteryCount?: number
+  avgMasteryReviewed?: number
 }
 
 export interface QuestionSource {
@@ -88,6 +101,22 @@ export interface ImportReport {
   insertedQuestionIds: number[]
 }
 
+export interface QuestionReviewInfo {
+  progress: {
+    review_count: number
+    wrong_count: number
+    mastery_score: number
+    last_review_date: string | null
+    next_review_date: string | null
+    interval_days: number | null
+  } | null
+  records: Array<{
+    id: number
+    score: number
+    review_date: string
+  }>
+}
+
 export interface WrongQuestionSummary {
   id: number
   title: string
@@ -110,6 +139,7 @@ export interface ElectronAPI {
   getCramQuestions: (params?: { sourceFile?: string | null; limit?: number }) => Promise<ApiResponse<CramQuestionSummary[]>>
   getWrongQuestions: () => Promise<ApiResponse<WrongQuestionSummary[]>>
   resetWrongCount: (questionId: number) => Promise<ApiResponse>
+  getQuestionReviewInfo: (questionId: number) => Promise<ApiResponse<QuestionReviewInfo>>
 }
 
 declare global {

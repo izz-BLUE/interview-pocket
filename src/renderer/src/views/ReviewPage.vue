@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
-import type { QuestionDetail } from '../../../preload/index.d'
+import type { QuestionDetail, QuestionReviewInfo } from '../../../preload/index.d'
 
 const router = useRouter()
 const route = useRoute()
@@ -13,6 +13,40 @@ const reviewSubmitted = ref(false)
 const completed = ref(false)
 const submitResult = ref<any | null>(null)
 const activeTab = ref<'standard' | 'short' | 'deep' | 'raw'>('standard')
+
+// 复习记录
+const reviewInfo = ref<QuestionReviewInfo | null>(null)
+const loadingReviewInfo = ref(false)
+
+// 本轮 session 统计
+const sessionScores = ref<number[]>([])
+
+// 本轮统计计算
+const sessionStats = computed(() => {
+  const scores = sessionScores.value
+  if (scores.length === 0) return null
+  const avg = scores.reduce((a, b) => a + b, 0) / scores.length
+  const max = Math.max(...scores)
+  const min = Math.min(...scores)
+  const lowCount = scores.filter(s => s <= 2).length
+  const highCount = scores.filter(s => s >= 4).length
+  return {
+    count: scores.length,
+    avg: Math.round(avg * 10) / 10,
+    max,
+    min,
+    lowCount,
+    highCount
+  }
+})
+
+const scoreLabels: Record<number, string> = {
+  1: '完全不会',
+  2: '大部分不会',
+  3: '会一半',
+  4: '基本会',
+  5: '完全掌握'
+}
 
 // 计算属性：是否有任何答案内容
 const hasAnyAnswer = computed(() => {
@@ -63,6 +97,7 @@ function resetQuestionState() {
   reviewSubmitted.value = false
   activeTab.value = 'standard'
   submitResult.value = null
+  reviewInfo.value = null
 }
 
 // 根据 ID 加载题目
@@ -73,6 +108,7 @@ async function loadQuestionById(id: number) {
     if (result.success && result.data) {
       question.value = result.data
       resetQuestionState()
+      loadReviewInfo(id)
     } else {
       question.value = null
     }
@@ -81,6 +117,21 @@ async function loadQuestionById(id: number) {
     question.value = null
   } finally {
     loading.value = false
+  }
+}
+
+// 加载复习记录
+async function loadReviewInfo(questionId: number) {
+  loadingReviewInfo.value = true
+  try {
+    const result = await api.getQuestionReviewInfo(questionId)
+    if (result.success && result.data) {
+      reviewInfo.value = result.data
+    }
+  } catch (error) {
+    console.error('Failed to load review info:', error)
+  } finally {
+    loadingReviewInfo.value = false
   }
 }
 
@@ -129,6 +180,7 @@ async function submitScore(score: number) {
     if (result.success) {
       reviewSubmitted.value = true
       submitResult.value = result
+      sessionScores.value.push(score)
     }
   } catch (error) {
     console.error('Failed to submit review:', error)
@@ -148,6 +200,11 @@ function parseJsonField(field: string | null): string[] {
     return []
   }
 }
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '-'
+  return new Date(dateStr).toLocaleString()
+}
 </script>
 
 <template>
@@ -156,12 +213,45 @@ function parseJsonField(field: string | null): string[] {
 
     <div v-if="loading" class="loading">加载中...</div>
 
+    <!-- 队列完成页 -->
     <div v-else-if="completed" class="completed-state">
       <div class="completed-card">
-        <h2>🎉 今日复习已完成</h2>
-        <p>所有待复习题目都已复习完毕</p>
+        <template v-if="sessionStats">
+          <h2>🎉 本轮复习完成</h2>
+          <div class="session-stats">
+            <div class="session-stat-item">
+              <span class="session-stat-value">{{ sessionStats.count }}</span>
+              <span class="session-stat-label">复习题数</span>
+            </div>
+            <div class="session-stat-item">
+              <span class="session-stat-value">{{ sessionStats.avg }}</span>
+              <span class="session-stat-label">平均分</span>
+            </div>
+            <div class="session-stat-item">
+              <span class="session-stat-value">{{ sessionStats.max }}</span>
+              <span class="session-stat-label">最高分</span>
+            </div>
+            <div class="session-stat-item">
+              <span class="session-stat-value">{{ sessionStats.min }}</span>
+              <span class="session-stat-label">最低分</span>
+            </div>
+            <div class="session-stat-item">
+              <span class="session-stat-value warn">{{ sessionStats.lowCount }}</span>
+              <span class="session-stat-label">低分题数</span>
+            </div>
+            <div class="session-stat-item">
+              <span class="session-stat-value good">{{ sessionStats.highCount }}</span>
+              <span class="session-stat-label">掌握题数</span>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <h2>🎉 今日复习已完成</h2>
+          <p>所有待复习题目都已复习完毕</p>
+        </template>
         <div class="completed-actions">
           <button class="action-btn primary" @click="router.push('/')">返回首页</button>
+          <button class="action-btn secondary" @click="router.push('/wrong-review')">查看错题</button>
           <button class="action-btn secondary" @click="router.push('/questions')">查看题库</button>
         </div>
       </div>
@@ -262,6 +352,49 @@ function parseJsonField(field: string | null): string[] {
         </div>
       </div>
 
+      <!-- 复习记录 -->
+      <div class="review-info-card">
+        <h3>📊 复习记录</h3>
+        <div v-if="loadingReviewInfo" class="loading-small">加载中...</div>
+        <template v-else-if="reviewInfo">
+          <div v-if="reviewInfo.progress" class="progress-summary">
+            <div class="progress-item">
+              <span class="progress-label">复习次数</span>
+              <span class="progress-value">{{ reviewInfo.progress.review_count }}</span>
+            </div>
+            <div class="progress-item">
+              <span class="progress-label">错题次数</span>
+              <span class="progress-value" :class="{ warn: reviewInfo.progress.wrong_count > 0 }">{{ reviewInfo.progress.wrong_count }}</span>
+            </div>
+            <div class="progress-item">
+              <span class="progress-label">掌握度</span>
+              <span class="progress-value">{{ reviewInfo.progress.mastery_score }}%</span>
+            </div>
+            <div class="progress-item">
+              <span class="progress-label">最近复习</span>
+              <span class="progress-value small">{{ formatDate(reviewInfo.progress.last_review_date) }}</span>
+            </div>
+            <div class="progress-item">
+              <span class="progress-label">下次复习</span>
+              <span class="progress-value small">{{ formatDate(reviewInfo.progress.next_review_date) }}</span>
+            </div>
+          </div>
+          <div v-else class="no-records">暂无复习进度</div>
+
+          <div v-if="reviewInfo.records.length > 0" class="records-list">
+            <h4>历史记录</h4>
+            <div v-for="r in reviewInfo.records" :key="r.id" class="record-item">
+              <span class="record-date">{{ formatDate(r.review_date) }}</span>
+              <span class="record-score" :class="{ low: r.score <= 2, high: r.score >= 4 }">
+                {{ r.score }} - {{ scoreLabels[r.score] || '' }}
+              </span>
+            </div>
+          </div>
+          <div v-else class="no-records">暂无复习记录</div>
+        </template>
+        <div v-else class="no-records">暂无复习记录</div>
+      </div>
+
       <div v-if="showAnswer && !reviewSubmitted" class="review-section">
         <h3>自评打分</h3>
         <p>请根据你的回答情况进行评分</p>
@@ -315,6 +448,13 @@ function parseJsonField(field: string | null): string[] {
   color: #666;
 }
 
+.loading-small {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  font-size: 14px;
+}
+
 .completed-state {
   display: flex;
   justify-content: center;
@@ -338,6 +478,43 @@ function parseJsonField(field: string | null): string[] {
 .completed-card p {
   color: #666;
   margin-bottom: 32px;
+}
+
+/* 本轮统计 */
+.session-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.session-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+}
+
+.session-stat-value {
+  font-size: 28px;
+  font-weight: bold;
+  color: #1976d2;
+}
+
+.session-stat-value.warn {
+  color: #e65100;
+}
+
+.session-stat-value.good {
+  color: #2e7d32;
+}
+
+.session-stat-label {
+  font-size: 12px;
+  color: #666;
 }
 
 .completed-actions {
@@ -531,6 +708,101 @@ function parseJsonField(field: string | null): string[] {
   margin-bottom: 8px;
   font-size: 14px;
   color: #555;
+}
+
+/* 复习记录卡片 */
+.review-info-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-bottom: 24px;
+}
+
+.review-info-card h3 {
+  margin-bottom: 16px;
+  color: #333;
+}
+
+.progress-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.progress-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+}
+
+.progress-label {
+  font-size: 11px;
+  color: #999;
+}
+
+.progress-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.progress-value.warn {
+  color: #e65100;
+}
+
+.progress-value.small {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.records-list {
+  margin-top: 12px;
+}
+
+.records-list h4 {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.record-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.record-date {
+  color: #666;
+}
+
+.record-score {
+  font-weight: 500;
+  color: #333;
+}
+
+.record-score.low {
+  color: #e65100;
+}
+
+.record-score.high {
+  color: #2e7d32;
+}
+
+.no-records {
+  color: #999;
+  font-size: 14px;
+  text-align: center;
+  padding: 16px;
 }
 
 .review-section {
