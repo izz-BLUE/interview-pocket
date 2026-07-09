@@ -41,7 +41,7 @@ async function loadQuestions() {
   isSearchMode.value = false
   const sourceFile = selectedSource.value === 'ALL' ? null : selectedSource.value
   try {
-    const result = await api.listQuestions({ limit: 100, offset: 0, sourceFile })
+    const result = await api.listQuestions({ limit: 500, offset: 0, sourceFile })
     if (result.success && result.data) {
       questions.value = result.data
       total.value = result.total || 0
@@ -160,6 +160,9 @@ function getMasteryClass(score: number): string {
       <div class="list-header">
         <span>当前来源：{{ getSourceLabel() }}</span>
         <span>{{ isSearchMode ? `找到 ${total} 道相关题目` : `共 ${total} 道题` }}</span>
+      </div>
+      <div v-if="isSearchMode" class="search-limit-hint">
+        搜索结果最多显示前 100 条。
       </div>
 
       <div
@@ -324,6 +327,12 @@ h2 {
   margin-bottom: 16px;
   color: #666;
   font-size: 14px;
+}
+
+.search-limit-hint {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 12px;
 }
 
 .question-list {

@@ -165,7 +165,7 @@ export function registerIpcHandlers(): void {
   // 获取题目列表
   ipcMain.handle('listQuestions', (_event, params?: { limit?: number; offset?: number; sourceFile?: string | null }) => {
     try {
-      const limit = Math.min(Math.max(params?.limit ?? 100, 1), 500)
+      const limit = Math.min(Math.max(Number(params?.limit ?? 500) || 500, 1), 500)
       const offset = Math.max(params?.offset ?? 0, 0)
       const sourceFile = params?.sourceFile ?? null
       const effectiveSource = (!sourceFile || sourceFile === 'ALL') ? null : sourceFile
@@ -321,7 +321,7 @@ export function registerIpcHandlers(): void {
         INNER JOIN review_progress rp ON q.id = rp.question_id
         WHERE rp.wrong_count > 0
         ORDER BY rp.wrong_count DESC, rp.last_review_date ASC, q.id ASC
-        LIMIT 100
+        LIMIT 500
       `)
       return { success: true, data: questions }
     } catch (error) {
@@ -444,7 +444,7 @@ export function registerIpcHandlers(): void {
               AND rr.review_date < ?
           )
         ORDER BY rp.next_review_date ASC, q.id ASC
-        LIMIT 50
+        LIMIT 500
       `, [todayStartStr, todayEndStr])
 
       return { success: true, data: questions }
