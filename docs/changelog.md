@@ -61,3 +61,25 @@
 
 ### Notes
 - 本版本不涉及 AI 接入、云同步、EXE 打包、系统托盘或全局快捷键。
+
+## v0.2.2-cram-mode
+
+### Added
+- 新增面试前突击模式入口。
+- 新增题库来源选择能力。
+- 新增 getQuestionSources IPC，用于获取题库来源列表。
+- 新增 getCramQuestions IPC，用于获取突击模式题目。
+- 支持突击模式快速浏览题目。
+- 支持显示答案。
+- 支持临时标记“不确定”。
+- 支持完成后只复习不确定题。
+- 支持突击完成统计展示。
+
+### Fixed
+- 增强 getCramQuestions 的 limit 参数保护。
+- 增强 CramModePage 中 JSON 字段解析的安全性。
+
+### Notes
+- 突击模式为纯浏览模式，不写入 review_records。
+- 突击模式不更新 review_progress。
+- 突击模式不会影响今日待复习、今日已复习、wrong_count 或 mastery_score。
