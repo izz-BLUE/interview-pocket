@@ -28,6 +28,9 @@ export async function initDatabase(): Promise<Database> {
   // 创建表
   createTables(db)
 
+  // 执行 migration
+  migrateDatabase(db)
+
   // 保存数据库
   saveDatabase()
 
@@ -98,6 +101,20 @@ function createTables(db: Database): void {
   db.run(`CREATE INDEX IF NOT EXISTS idx_question_tags_tag ON question_tags(tag)`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_review_progress_next_date ON review_progress(next_review_date)`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_review_records_question ON review_records(question_id)`)
+}
+
+function migrateDatabase(db: Database): void {
+  // 检查 review_progress 是否有 wrong_count 字段
+  const columns = queryAll(`PRAGMA table_info(review_progress)`)
+  const columnNames = columns.map((col: any) => col.name)
+
+  if (!columnNames.includes('wrong_count')) {
+    db.run(`ALTER TABLE review_progress ADD COLUMN wrong_count INTEGER DEFAULT 0`)
+  }
+
+  if (!columnNames.includes('mastery_score')) {
+    db.run(`ALTER TABLE review_progress ADD COLUMN mastery_score INTEGER DEFAULT 0`)
+  }
 }
 
 export function saveDatabase(): void {

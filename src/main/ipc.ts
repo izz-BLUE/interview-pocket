@@ -177,9 +177,9 @@ export function registerIpcHandlers(): void {
 
       // 插入复习记录
       runSql(`
-        INSERT INTO review_records (question_id, score)
-        VALUES (?, ?)
-      `, [questionId, score])
+        INSERT INTO review_records (question_id, score, review_date)
+        VALUES (?, ?, ?)
+      `, [questionId, score, nowStr])
 
       // 更新复习进度
       const nextReviewAt = updateReviewProgress(questionId, score, nowStr)
