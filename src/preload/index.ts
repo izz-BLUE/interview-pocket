@@ -63,8 +63,8 @@ const api = {
   },
 
   // 删除题库来源
-  deleteQuestionSource: (sourceFile: string) => {
-    return ipcRenderer.invoke('deleteQuestionSource', sourceFile)
+  deleteQuestionSource: (sourceKey: string) => {
+    return ipcRenderer.invoke('deleteQuestionSource', sourceKey)
   }
 }
 

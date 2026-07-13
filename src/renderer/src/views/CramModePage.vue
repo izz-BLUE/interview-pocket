@@ -197,12 +197,12 @@ function parseJsonField(field: string | null): string[] {
               </label>
               <label
                 v-for="s in sources"
-                :key="s.source_file"
+                :key="s.source_key"
                 class="source-item"
-                :class="{ active: selectedSource === s.source_file }"
+                :class="{ active: selectedSource === s.source_key }"
               >
-                <input type="radio" v-model="selectedSource" :value="s.source_file" />
-                <span class="source-name">{{ s.source_file }}</span>
+                <input type="radio" v-model="selectedSource" :value="s.source_key" />
+                <span class="source-name">{{ s.display_name }}</span>
                 <span class="source-count">{{ s.count }} 题</span>
               </label>
             </div>

@@ -1,0 +1,168 @@
+:root {
+  color-scheme: light;
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-soft: #eef2ff;
+  --color-primary-border: #c7d2fe;
+  --color-text: #172033;
+  --color-text-muted: #667085;
+  --color-text-subtle: #98a2b3;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8fafc;
+  --color-background: #f3f5f9;
+  --color-border: #e7eaf0;
+  --color-border-strong: #d6dae3;
+  --color-success: #16a34a;
+  --color-success-soft: #ecfdf3;
+  --color-warning: #ea580c;
+  --color-warning-soft: #fff7ed;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fef2f2;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 8px 24px rgba(25, 33, 61, 0.08);
+  --shadow-lg: 0 18px 48px rgba(25, 33, 61, 0.12);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  min-width: 720px;
+  color: var(--color-text);
+  background: var(--color-background);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(79, 70, 229, 0.18);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+::selection {
+  color: #fff;
+  background: var(--color-primary);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd1dc;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 复习相关页面共用视觉基线，保留各模式自身的语义色。 */
+:is(.review-container, .wrong-review-container, .cram-container) {
+  width: min(920px, 100%) !important;
+  max-width: none !important;
+  margin: 0 auto;
+}
+
+:is(.review-container, .wrong-review-container, .cram-container) .back-btn {
+  padding: 8px 12px !important;
+  color: var(--color-text-muted) !important;
+  background: rgba(255, 255, 255, 0.78) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 10px !important;
+  backdrop-filter: blur(10px);
+}
+
+:is(.review-container, .wrong-review-container, .cram-container) .back-btn:hover {
+  color: var(--color-primary) !important;
+  border-color: var(--color-primary-border) !important;
+}
+
+:is(.review-container, .wrong-review-container, .cram-container) :is(
+  .question-card,
+  .completed-card,
+  .setup-card,
+  .empty-state,
+  .review-info-card
+) {
+  background: var(--color-surface) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+:is(.review-container, .wrong-review-container, .cram-container) .question-title {
+  color: var(--color-text) !important;
+  letter-spacing: -0.018em;
+}
+
+:is(.review-container, .wrong-review-container, .cram-container) .answer-content {
+  background: var(--color-surface-muted) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+:is(.review-container, .wrong-review-container, .cram-container) .tab-btn.active {
+  color: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+}
+
+:is(.review-container, .wrong-review-container, .cram-container) :is(.show-answer-btn, .start-btn, .next-btn) {
+  background: linear-gradient(135deg, var(--color-primary), #6366f1) !important;
+  border-radius: 11px !important;
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.2);
+}
+
+:is(.review-container, .wrong-review-container, .cram-container) :is(.show-answer-btn, .start-btn, .next-btn):hover {
+  background: linear-gradient(135deg, var(--color-primary-hover), var(--color-primary)) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

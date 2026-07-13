@@ -69,7 +69,7 @@ Main 进程读取文件内容 (fs.readFileSync)
 Markdown Parser 解析题目
   - 按 ## 分割题目
   - 提取 follow_ups、warnings
-  - 跳过重复题目 (title + source_file 唯一)
+  - 跳过重复题目 (title + source_key 唯一)
         │
         ▼
 写入 questions 表 + review_progress 表
@@ -127,8 +127,8 @@ Renderer 展示本轮统计
         │
         ▼
 getQuestionSources()
-  - SELECT source_file, COUNT(*) as question_count
-  - GROUP BY source_file
+  - SELECT source_key, source_file, COUNT(*) as question_count
+  - GROUP BY source_key, source_file
         │
         ▼
 展示来源列表 (来源名 + 题目数)
@@ -137,7 +137,7 @@ getQuestionSources()
 用户点击删除来源 → 二次确认弹窗
         │
         ▼
-deleteQuestionSource(source_file)
+deleteQuestionSource(source_key)
   - 查出该来源所有 question_id
   - 在同一事务中删除 review_records / review_progress / questions
   - 事务提交后统一持久化数据库文件
@@ -157,7 +157,7 @@ searchQuestions({ keyword, sourceFile, reviewStatus })
         │
         ▼
 Main 层根据 sourceFile 和 reviewStatus 构造动态 WHERE
-  - sourceFile: = 匹配 source_file
+  - sourceFile: 实际传递稳定的 source_key，匹配 source_key
   - reviewStatus: 基于 review_progress 字段判断
         │
         ▼
@@ -165,9 +165,11 @@ LEFT JOIN review_progress 获取候选题
   - COALESCE(rp.field, 0) 防御空值
         │
         ▼
-keyword 不在 SQL 中做 LIKE，而是在内存中处理
+keyword 先下推 SQLite 做候选过滤
+  - 对 LIKE 通配符进行转义
+  - 只把至少命中一个关键词的候选题加载到内存
   - normalizeKeyword 标准化关键词
-  - calculateScore 计算命中分数
+  - calculateScore 计算最终相关性分数
         │
         ▼
 按 score、matchRatio、id 排序
@@ -229,7 +231,7 @@ keyword 不在 SQL 中做 LIKE，而是在内存中处理
 | **不做 AI 接入** | 先保证复习闭环，避免过度设计 | 后续可扩展 AI 题目分析、智能推荐 |
 | **不做 Markdown 富文本渲染** | 降低 XSS 风险，使用纯文本展示更安全 | 可引入安全的 Markdown 渲染库 |
 | **不做单题编辑/删除** | 当前通过重新导入覆盖，优先级较低 | 后续可增加单题管理功能 |
-| **不做自动化测试** | 个人项目，手动验证成本可控 | 后续可补充 IPC 层单元测试 |
+| **测试聚焦核心逻辑** | 已覆盖解析、来源标识、搜索 SQL、事务和参数校验 | 后续可继续补充 Electron E2E |
 | **复习算法简单** | 当前 SM-2 变体够用，避免过度工程 | 后续可引入更成熟的间隔重复算法 |
 
 ## 7. 技术栈总结
@@ -273,6 +275,7 @@ keyword 不在 SQL 中做 LIKE，而是在内存中处理
 | warnings | TEXT | 注意事项 (JSON) |
 | raw_markdown | TEXT | 原始 Markdown |
 | source_file | TEXT | 来源文件名 |
+| source_key | TEXT | 规范化路径的 SHA-256，用于区分同名来源 |
 | created_at | DATETIME | 创建时间 |
 | updated_at | DATETIME | 更新时间 |
 

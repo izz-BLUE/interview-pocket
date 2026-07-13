@@ -134,7 +134,7 @@ function getMatchFieldLabel(field: string): string {
 
 function getSourceLabel(): string {
   if (selectedSource.value === 'ALL') return '全部题库'
-  return selectedSource.value
+  return sources.value.find(source => source.source_key === selectedSource.value)?.display_name || '当前题库'
 }
 
 function getReviewStatusLabel(): string {
@@ -150,39 +150,49 @@ function getMasteryClass(score: number): string {
 
 <template>
   <div class="question-list-container">
-    <h2>题库</h2>
+    <header class="page-heading">
+      <div>
+        <span class="page-kicker">QUESTION LIBRARY</span>
+        <h1>题库</h1>
+        <p>按来源、复习状态或关键词快速定位需要巩固的内容。</p>
+      </div>
+      <div class="total-badge"><strong>{{ total }}</strong><span>当前题目</span></div>
+    </header>
 
-    <div class="search-bar">
-      <input
-        v-model="searchKeyword"
-        type="text"
-        placeholder="搜索题目..."
-        @keydown="handleKeydown"
-      />
-      <button @click="handleSearch">搜索</button>
-      <button v-if="isSearchMode" class="clear-btn" @click="clearSearch">清除</button>
-    </div>
-
-    <div class="filters-row">
-      <div class="source-filter">
-        <label class="filter-label">来源筛选：</label>
-        <select v-model="selectedSource" @change="onSourceChange" class="source-select">
-          <option value="ALL">全部题库</option>
-          <option v-for="s in sources" :key="s.source_file" :value="s.source_file">
-            {{ s.source_file }}（{{ s.count }}）
-          </option>
-        </select>
+    <section class="control-panel">
+      <div class="search-bar">
+        <span class="search-icon">⌕</span>
+        <input
+          v-model="searchKeyword"
+          type="text"
+          placeholder="搜索标题、答案或记忆锚点..."
+          @keydown="handleKeydown"
+        />
+        <button @click="handleSearch">搜索</button>
+        <button v-if="isSearchMode" class="clear-btn" @click="clearSearch">清除</button>
       </div>
 
-      <div class="status-filter">
-        <label class="filter-label">复习状态：</label>
-        <select v-model="selectedReviewStatus" @change="onReviewStatusChange" class="status-select">
-          <option v-for="option in reviewStatusOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
+      <div class="filters-row">
+        <div class="source-filter">
+          <label class="filter-label">题库来源</label>
+          <select v-model="selectedSource" @change="onSourceChange" class="source-select">
+            <option value="ALL">全部题库</option>
+            <option v-for="s in sources" :key="s.source_key" :value="s.source_key">
+              {{ s.display_name }}（{{ s.count }}）
+            </option>
+          </select>
+        </div>
+
+        <div class="status-filter">
+          <label class="filter-label">复习状态</label>
+          <select v-model="selectedReviewStatus" @change="onReviewStatusChange" class="status-select">
+            <option v-for="option in reviewStatusOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
       </div>
-    </div>
+    </section>
 
     <div v-if="loading" class="loading">加载中...</div>
 
@@ -249,76 +259,147 @@ function getMasteryClass(score: number): string {
 
 <style scoped>
 .question-list-container {
-  max-width: 800px;
+  width: 100%;
 }
 
-h2 {
-  margin-bottom: 24px;
-  color: #333;
+.page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 26px;
+}
+
+.page-kicker {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--color-primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.page-heading h1 {
+  margin: 0 0 7px;
+  color: var(--color-text);
+  font-size: 30px;
+  letter-spacing: -0.035em;
+}
+
+.page-heading p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.total-badge {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.total-badge strong {
+  color: var(--color-primary);
+  font-size: 20px;
+}
+
+.control-panel {
+  padding: 16px;
+  margin-bottom: 22px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(12px);
 }
 
 .search-bar {
+  position: relative;
   display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 9px;
+  margin-bottom: 14px;
+}
+
+.search-icon {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  z-index: 1;
+  color: var(--color-text-subtle);
+  font-size: 20px;
+  transform: translateY(-54%);
 }
 
 .search-bar input {
   flex: 1;
-  padding: 12px 16px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  min-width: 180px;
+  padding: 12px 16px 12px 42px;
+  color: var(--color-text);
+  background: var(--color-surface-muted);
+  border: 1px solid transparent;
+  border-radius: 11px;
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s;
 }
 
 .search-bar input:focus {
-  border-color: #1976d2;
+  background: var(--color-surface);
+  border-color: var(--color-primary-border);
 }
 
 .search-bar button {
-  padding: 12px 24px;
-  background-color: #1976d2;
+  padding: 11px 22px;
+  background-color: var(--color-primary);
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 10px;
   font-size: 14px;
   cursor: pointer;
   transition: background-color 0.2s;
 }
 
 .search-bar button:hover {
-  background-color: #1565c0;
+  background-color: var(--color-primary-hover);
 }
 
 .clear-btn {
-  background-color: #757575 !important;
+  color: var(--color-text-muted) !important;
+  background-color: var(--color-surface-muted) !important;
+  border: 1px solid var(--color-border) !important;
 }
 
 .clear-btn:hover {
-  background-color: #616161 !important;
+  color: var(--color-text) !important;
+  background-color: #eef0f4 !important;
 }
 
 .filters-row {
   display: flex;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 0;
   flex-wrap: wrap;
 }
 
 .source-filter,
 .status-filter {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  display: grid;
+  gap: 6px;
   flex: 1;
   min-width: 200px;
 }
 
 .filter-label {
-  font-size: 14px;
-  color: #666;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -326,18 +407,18 @@ h2 {
 .status-select {
   flex: 1;
   padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
   font-size: 14px;
-  color: #333;
-  background-color: #fff;
+  color: var(--color-text);
+  background-color: var(--color-surface);
   outline: none;
   cursor: pointer;
 }
 
 .source-select:focus,
 .status-select:focus {
-  border-color: #1976d2;
+  border-color: var(--color-primary);
 }
 
 .loading {
@@ -389,22 +470,27 @@ h2 {
 }
 
 .question-item {
-  background: #fff;
-  border-radius: 8px;
-  padding: 16px 20px;
+  position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-sm);
 }
 
 .question-item:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--color-primary-border);
+  box-shadow: var(--shadow-md);
 }
 
 .question-title {
   font-size: 16px;
-  color: #333;
+  color: var(--color-text);
+  font-weight: 600;
+  line-height: 1.55;
   margin-bottom: 8px;
 }
 

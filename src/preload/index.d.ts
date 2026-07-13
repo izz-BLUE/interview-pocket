@@ -72,7 +72,9 @@ export interface StatsData {
 }
 
 export interface QuestionSource {
+  source_key: string
   source_file: string
+  display_name: string
   count: number
 }
 
@@ -86,6 +88,7 @@ export interface CramQuestionSummary {
 
 export interface ImportReport {
   sourceFile: string
+  sourceKey: string
   parsedCount: number
   insertedCount: number
   duplicatedCount: number
@@ -143,6 +146,7 @@ export interface WrongQuestionSummary {
 
 export interface DeleteQuestionSourceResult {
   sourceFile: string
+  sourceKey: string
   deletedQuestionCount: number
   deletedReviewRecordCount: number
   deletedProgressCount: number
@@ -161,7 +165,7 @@ export interface ElectronAPI {
   getWrongQuestions: () => Promise<ApiResponse<WrongQuestionSummary[]>>
   resetWrongCount: (questionId: number) => Promise<ApiResponse>
   getQuestionReviewInfo: (questionId: number) => Promise<ApiResponse<QuestionReviewInfo>>
-  deleteQuestionSource: (sourceFile: string) => Promise<ApiResponse<DeleteQuestionSourceResult>>
+  deleteQuestionSource: (sourceKey: string) => Promise<ApiResponse<DeleteQuestionSourceResult>>
 }
 
 declare global {

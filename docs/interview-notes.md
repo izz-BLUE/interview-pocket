@@ -109,7 +109,7 @@ sql.js 是纯 JavaScript 实现的 SQLite，不需要编译原生模块。选择
 
 **回答**：
 
-在导入时，对每道题生成一个唯一标识：`title + source_file`。
+在导入时，对每道题使用 `title + source_key` 作为唯一标识。`source_key` 是规范化绝对路径的 SHA-256，不暴露真实路径，同时能区分不同目录下的同名文件。
 
 插入前先查询是否已存在，如果存在就跳过，并在导入报告中记录 `skippedCount`。
 
@@ -119,12 +119,12 @@ sql.js 是纯 JavaScript 实现的 SQLite，不需要编译原生模块。选择
 
 **回答**：
 
-数据库中每道题都有 `source_file` 字段，记录它来自哪个 Markdown 文件。
+数据库中每道题保留 `source_file` 用于界面展示，同时使用 `source_key` 作为稳定的来源标识。
 
 来源筛选的实现是：
 
-1. `getQuestionSources`：查询所有不重复的 `source_file` 及其题目数量。
-2. `listQuestions` / `searchQuestions`：接受 `sourceFile` 参数，动态添加 `WHERE source_file = ?` 条件。
+1. `getQuestionSources`：按 `source_key + source_file` 分组查询来源和题目数量。
+2. `listQuestions` / `searchQuestions`：接口保留 `sourceFile` 参数名以兼容现有调用，实际传递 `source_key` 并添加 `WHERE source_key = ?` 条件。
 
 用户选择特定来源后，只显示该来源的题目。
 
@@ -179,7 +179,7 @@ sql.js 是纯 JavaScript 实现的 SQLite，不需要编译原生模块。选择
 1. 先查出该来源所有题目的 `id` 列表。
 2. 删除 `review_records` 中这些 `question_id` 的记录。
 3. 删除 `review_progress` 中这些 `question_id` 的记录。
-4. 最后删除 `questions` 表中该 `source_file` 的记录。
+4. 最后删除 `questions` 表中该 `source_key` 的记录。
 
 事务提交后只统一导出并持久化一次数据库文件，既保证一致性，也避免每删除一批记录就重复写整个文件。
 
@@ -203,7 +203,7 @@ sql.js 是纯 JavaScript 实现的 SQLite，不需要编译原生模块。选择
 
 1. **虚拟列表**：只渲染可视区域的题目，大幅减少 DOM 节点。
 2. **服务端分页**：将分页逻辑移到数据库层，每次只查询当前页的数据。
-3. **索引优化**：为 `source_file`、`review_count`、`mastery_score` 等常用筛选字段添加索引。
+3. **搜索优化**：当前已将关键词候选过滤下推 SQLite；数据继续增长时可升级为 SQLite FTS，并为复习状态增加组合索引。
 4. **懒加载**：题目详情（答案、追问）在展开时才加载，而不是列表加载时一起查。
 
 当前架构已经做了分层，这些优化可以逐步进行，不需要重构。
@@ -241,7 +241,7 @@ sql.js 是纯 JavaScript 实现的 SQLite，不需要编译原生模块。选择
 - **缺少虚拟列表**：题目数量多时，列表渲染可能卡顿。
 - **缺少数据导出**：无法将复习数据导出为 CSV 或其他格式。
 - **复习算法简单**：当前掌握度采用指数加权，间隔使用固定映射，不如专业间隔重复算法（如 Anki 的 SM-2）精确。
-- **自动化测试仍需扩充**：已覆盖 Markdown 核心解析和掌握度计算，后续还需要覆盖 IPC 与数据库事务回滚。
+- **自动化测试仍可扩充**：已覆盖 Markdown 解析、掌握度、来源标识、搜索 SQL、事务回滚和 IPC 参数校验，后续可补充 Electron E2E。
 - **缺少分页控件**：虽然有分页逻辑，但 UI 上没有分页导航。
 
 这些不是缺陷，而是"已知的优化方向"，说明你对项目有清晰的认识。

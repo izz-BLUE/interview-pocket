@@ -1,6 +1,13 @@
 import type { ElectronAPI } from '../../../preload/index.d'
+import { mockApi } from './mock'
 
 // 获取暴露的 API
-const api: ElectronAPI = window.api
+function resolveApi(): ElectronAPI {
+  if (window.api) return window.api
+  if (import.meta.env.DEV) return mockApi
+  throw new Error('Electron preload API is unavailable')
+}
+
+const api = resolveApi()
 
 export default api

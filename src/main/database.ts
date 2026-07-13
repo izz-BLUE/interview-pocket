@@ -2,6 +2,9 @@ import initSqlJs, { Database } from 'sql.js'
 import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { executeTransaction } from './transaction'
+import { migrateQuestionSourceKey } from './source-migration'
+import { writeFileAtomically } from './persistence'
 
 let db: Database | null = null
 let dbPath: string = ''
@@ -56,6 +59,7 @@ function createTables(db: Database): void {
       warnings TEXT,
       raw_markdown TEXT,
       source_file TEXT,
+      source_key TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -118,24 +122,17 @@ function migrateDatabase(db: Database): void {
   if (!columnNames.includes('mastery_score')) {
     db.run(`ALTER TABLE review_progress ADD COLUMN mastery_score INTEGER DEFAULT 0`)
   }
+
+  // 旧数据使用文件名兼容，下次重新导入时再升级为路径哈希。
+  migrateQuestionSourceKey(db)
 }
 
 export function saveDatabase(): void {
   if (!db) return
   const data = db.export()
   const buffer = Buffer.from(data)
-  const tempPath = `${dbPath}.${process.pid}.tmp`
-
-  try {
-    fs.writeFileSync(tempPath, buffer)
-    fs.renameSync(tempPath, dbPath)
-    hasPendingChanges = false
-  } catch (error) {
-    if (fs.existsSync(tempPath)) {
-      fs.rmSync(tempPath, { force: true })
-    }
-    throw error
-  }
+  writeFileAtomically(dbPath, buffer)
+  hasPendingChanges = false
 }
 
 export function getDatabase(): Database {
@@ -192,31 +189,26 @@ export function runInTransaction<T>(operation: () => T): T {
   if (transactionDepth !== 0) {
     throw new Error('Nested database transactions are not supported')
   }
+  transactionDepth++
   let committed = false
 
-  database.run('BEGIN IMMEDIATE TRANSACTION')
-  transactionDepth++
-
   try {
-    const result = operation()
-    transactionDepth--
-
-    database.run('COMMIT')
-    committed = true
-    if (hasPendingChanges) {
-      saveDatabase()
-    }
-    return result
+    return executeTransaction(
+      database,
+      operation,
+      () => {
+        committed = true
+        transactionDepth--
+        if (hasPendingChanges) {
+          saveDatabase()
+        }
+      }
+    )
   } catch (error) {
     if (transactionDepth > 0) {
       transactionDepth--
     }
     if (!committed) {
-      try {
-        database.run('ROLLBACK')
-      } catch {
-        // 保留原始异常，避免回滚异常覆盖真正失败原因
-      }
       hasPendingChanges = false
     }
     throw error

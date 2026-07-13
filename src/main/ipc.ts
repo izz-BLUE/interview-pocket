@@ -3,7 +3,9 @@ import { queryAll, queryOne, runInTransaction, runSql } from './database'
 import { parseMarkdown } from './markdown'
 import { searchQuestions } from './search'
 import { calculateReviewSchedule } from './review'
-import { safeLog, safeError } from './logger'
+import { addSourceDisplayNames, createSourceKey } from './source'
+import { isPositiveInteger, isReviewScore, normalizeSourceFilter } from './validation'
+import { safeError } from './logger'
 import fs from 'fs'
 import path from 'path'
 
@@ -42,14 +44,15 @@ export function registerIpcHandlers(): void {
       // 读取文件内容
       const content = fs.readFileSync(targetPath, 'utf-8')
       const fileName = path.basename(targetPath)
+      const sourceKey = createSourceKey(targetPath)
 
       // 解析 Markdown
       const parsedQuestions = parseMarkdown(content, fileName)
 
       // 保存到数据库
       const insertQuestionSql = `
-        INSERT INTO questions (title, category, source_heading_path, standard_answer, short_answer, deep_answer, memory_point, follow_ups, warnings, raw_markdown, source_file)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO questions (title, category, source_heading_path, standard_answer, short_answer, deep_answer, memory_point, follow_ups, warnings, raw_markdown, source_file, source_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
 
       const insertProgressSql = `
@@ -72,6 +75,13 @@ export function registerIpcHandlers(): void {
       let warningCount = 0
 
       runInTransaction(() => {
+        // 将同名旧来源升级为路径哈希；后续不同目录的同名文件可以独立管理。
+        runSql(`
+          UPDATE questions
+          SET source_key = ?
+          WHERE source_file = ? AND source_key = source_file
+        `, [sourceKey, fileName])
+
         for (const q of parsedQuestions) {
         // 统计答案字段
         if (q.standard_answer) standardAnswerCount++
@@ -93,10 +103,10 @@ export function registerIpcHandlers(): void {
           noAnswerQuestions.push({ title: q.title, category: q.category || null })
         }
 
-        // 检查是否已存在相同题目（source_file + title）
+        // 检查是否已存在相同题目（source_key + title）
         const existing = queryOne(
-          'SELECT id FROM questions WHERE source_file = ? AND title = ?',
-          [fileName, q.title]
+          'SELECT id FROM questions WHERE source_key = ? AND title = ?',
+          [sourceKey, q.title]
         )
 
         if (existing) {
@@ -119,14 +129,11 @@ export function registerIpcHandlers(): void {
           q.follow_ups ? JSON.stringify(q.follow_ups) : null,
           q.warnings ? JSON.stringify(q.warnings) : null,
           q.raw_markdown || null,
-          fileName
+          fileName,
+          sourceKey
         ])
 
-        // 通过 title + source_file 获取刚插入的题目 ID
-        const insertedQuestion = queryOne(
-          'SELECT id FROM questions WHERE source_file = ? AND title = ? ORDER BY id DESC LIMIT 1',
-          [fileName, q.title]
-        )
+        const insertedQuestion = queryOne('SELECT last_insert_rowid() AS id')
 
         if (insertedQuestion) {
           insertedQuestionIds.push(insertedQuestion.id)
@@ -153,6 +160,7 @@ export function registerIpcHandlers(): void {
         duplicatedCount,
         report: {
           sourceFile: fileName,
+          sourceKey,
           parsedCount: parsedQuestions.length,
           insertedCount,
           duplicatedCount,
@@ -181,11 +189,10 @@ export function registerIpcHandlers(): void {
     try {
       const limit = Math.min(Math.max(Number(params?.limit ?? 500) || 500, 1), 500)
       const offset = Math.max(params?.offset ?? 0, 0)
-      const sourceFile = params?.sourceFile ?? null
-      const effectiveSource = (!sourceFile || sourceFile === 'ALL') ? null : sourceFile
+      const effectiveSource = normalizeSourceFilter(params?.sourceFile)
       const reviewStatus = params?.reviewStatus ?? 'ALL'
 
-      const whereClauses = ['(? IS NULL OR q.source_file = ?)']
+      const whereClauses = ['(? IS NULL OR q.source_key = ?)']
       const queryParams: any[] = [effectiveSource, effectiveSource]
 
       switch (reviewStatus) {
@@ -244,6 +251,9 @@ export function registerIpcHandlers(): void {
   // 搜索题目（按相关性排序）
   ipcMain.handle('searchQuestions', (_event, keyword: string, params?: { sourceFile?: string | null; reviewStatus?: string }) => {
     try {
+      if (typeof keyword !== 'string') {
+        return { success: false, error: 'Keyword must be a string' }
+      }
       const results = searchQuestions(keyword, { sourceFile: params?.sourceFile, reviewStatus: params?.reviewStatus as any })
       return { success: true, data: results }
     } catch (error) {
@@ -255,6 +265,9 @@ export function registerIpcHandlers(): void {
   // 根据 ID 获取题目详情
   ipcMain.handle('getQuestionById', (_event, id: number) => {
     try {
+      if (!isPositiveInteger(id)) {
+        return { success: false, error: 'Invalid questionId' }
+      }
       const question = queryOne('SELECT * FROM questions WHERE id = ?', [id])
 
       if (!question) {
@@ -271,10 +284,10 @@ export function registerIpcHandlers(): void {
   // 提交复习评分
   ipcMain.handle('submitReview', (_event, questionId: number, score: number) => {
     try {
-      if (!Number.isInteger(questionId) || questionId <= 0) {
+      if (!isPositiveInteger(questionId)) {
         return { success: false, error: 'Invalid questionId' }
       }
-      if (!Number.isInteger(score) || score < 1 || score > 5) {
+      if (!isReviewScore(score)) {
         return { success: false, error: 'Score must be an integer between 1 and 5' }
       }
       if (!queryOne('SELECT id FROM questions WHERE id = ?', [questionId])) {
@@ -328,31 +341,37 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('getQuestionSources', () => {
     try {
       const sources = queryAll(`
-        SELECT source_file, COUNT(*) as count
+        SELECT source_key, source_file, COUNT(*) as count
         FROM questions
         WHERE source_file IS NOT NULL AND source_file != ''
-        GROUP BY source_file
-        ORDER BY source_file ASC
+        GROUP BY source_key, source_file
+        ORDER BY source_file ASC, source_key ASC
       `)
-      return { success: true, data: sources }
+      const data = addSourceDisplayNames(sources)
+      return { success: true, data }
     } catch (error) {
       safeError('Get question sources failed:', error)
       return { success: false, error: String(error) }
     }
   })
 
-  // 删除题库来源（按 source_file 删除整份题库）
-  ipcMain.handle('deleteQuestionSource', (_event, sourceFile: string) => {
+  // 删除题库来源（按稳定 source_key 删除整份题库）
+  ipcMain.handle('deleteQuestionSource', (_event, sourceKey: string) => {
     try {
-      if (!sourceFile || !sourceFile.trim()) {
-        return { success: false, error: 'sourceFile is required' }
+      if (!sourceKey || !sourceKey.trim()) {
+        return { success: false, error: 'sourceKey is required' }
       }
 
-      const trimmed = sourceFile.trim()
+      const trimmed = sourceKey.trim()
+      const source = queryOne(
+        'SELECT source_file FROM questions WHERE source_key = ? LIMIT 1',
+        [trimmed]
+      )
+      const sourceFile = source?.source_file || trimmed
 
       // 1. 查询该来源所有题目 id
       const rows = queryAll(
-        'SELECT id FROM questions WHERE source_file = ?',
+        'SELECT id FROM questions WHERE source_key = ?',
         [trimmed]
       )
       const ids = rows.map((row: any) => row.id)
@@ -360,7 +379,7 @@ export function registerIpcHandlers(): void {
       if (ids.length === 0) {
         return {
           success: true,
-          data: { sourceFile: trimmed, deletedQuestionCount: 0, deletedReviewRecordCount: 0, deletedProgressCount: 0 }
+          data: { sourceFile, sourceKey: trimmed, deletedQuestionCount: 0, deletedReviewRecordCount: 0, deletedProgressCount: 0 }
         }
       }
 
@@ -390,13 +409,14 @@ export function registerIpcHandlers(): void {
         )
 
         // 4. 删除 questions
-        runSql('DELETE FROM questions WHERE source_file = ?', [trimmed])
+        runSql('DELETE FROM questions WHERE source_key = ?', [trimmed])
       })
 
       return {
         success: true,
         data: {
-          sourceFile: trimmed,
+          sourceFile,
+          sourceKey: trimmed,
           deletedQuestionCount: ids.length,
           deletedReviewRecordCount: rrCount?.count || 0,
           deletedProgressCount: rpCount?.count || 0
@@ -411,14 +431,13 @@ export function registerIpcHandlers(): void {
   // 获取突击模式题目列表
   ipcMain.handle('getCramQuestions', (_event, params?: { sourceFile?: string | null; limit?: number }) => {
     try {
-      const sourceFile = params?.sourceFile ?? null
-      const effectiveSource = (!sourceFile || sourceFile === 'ALL') ? null : sourceFile
+      const effectiveSource = normalizeSourceFilter(params?.sourceFile)
       const rawLimit = params?.limit ?? 200
       const limit = Math.min(Math.max(Number(rawLimit) || 200, 1), 500)
       const questions = queryAll(`
         SELECT id, title, category, source_file, memory_point
         FROM questions
-        WHERE (? IS NULL OR source_file = ?)
+        WHERE (? IS NULL OR source_key = ?)
         ORDER BY id ASC
         LIMIT ?
       `, [effectiveSource, effectiveSource, limit])
@@ -457,7 +476,7 @@ export function registerIpcHandlers(): void {
   // 重置错题计数
   ipcMain.handle('resetWrongCount', (_event, questionId: number) => {
     try {
-      if (!Number.isInteger(questionId) || questionId <= 0) {
+      if (!isPositiveInteger(questionId)) {
         return { success: false, error: 'Invalid questionId' }
       }
       runSql(`
@@ -580,6 +599,9 @@ export function registerIpcHandlers(): void {
   // 获取单题复习信息
   ipcMain.handle('getQuestionReviewInfo', (_event, questionId: number) => {
     try {
+      if (!isPositiveInteger(questionId)) {
+        return { success: false, error: 'Invalid questionId' }
+      }
       const progress = queryOne(`
         SELECT review_count, wrong_count, mastery_score, last_review_date, next_review_date, interval_days
         FROM review_progress

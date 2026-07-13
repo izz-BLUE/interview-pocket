@@ -45,7 +45,7 @@ function continueImport() {
 
 function viewSourceQuestions() {
   if (report.value) {
-    router.push({ path: '/questions', query: { sourceFile: report.value.sourceFile } })
+    router.push({ path: '/questions', query: { sourceFile: report.value.sourceKey } })
   }
 }
 
@@ -61,8 +61,9 @@ async function loadSources() {
   }
 }
 
-async function deleteSource(sourceFile: string) {
-  const source = sources.value.find(s => s.source_file === sourceFile)
+async function deleteSource(sourceKey: string) {
+  const source = sources.value.find(s => s.source_key === sourceKey)
+  const sourceFile = source?.display_name || sourceKey
   const count = source?.count ?? 0
 
   const confirmed = window.confirm(
@@ -71,12 +72,12 @@ async function deleteSource(sourceFile: string) {
 
   if (!confirmed) return
 
-  deletingSource.value = sourceFile
+  deletingSource.value = sourceKey
   deleteResult.value = null
   deleteError.value = null
 
   try {
-    const result = await api.deleteQuestionSource(sourceFile)
+    const result = await api.deleteQuestionSource(sourceKey)
     if (result.success && result.data) {
       deleteResult.value = result.data
       deleteError.value = null
@@ -92,7 +93,11 @@ async function deleteSource(sourceFile: string) {
 
 <template>
   <div class="import-container">
-    <h2>导入题目</h2>
+    <header class="page-heading">
+      <span class="page-kicker">CONTENT MANAGEMENT</span>
+      <h1>导入与管理</h1>
+      <p>从 Markdown 构建题库，并在一个页面集中管理所有内容来源。</p>
+    </header>
 
     <!-- 导入报告 -->
     <div v-if="report" class="report-card">
@@ -183,9 +188,9 @@ async function deleteSource(sourceFile: string) {
 
     <!-- 导入区域 -->
     <div v-else class="import-card">
-      <div class="import-icon">📄</div>
+      <div class="import-icon">↓</div>
       <h3>从 Markdown 文件导入</h3>
-      <p>选择本地 Markdown 文件，系统将自动解析题目结构</p>
+      <p>支持结构化答案、记忆锚点、追问和注意事项，数据仅保存在本机。</p>
 
       <button
         class="import-btn"
@@ -222,17 +227,17 @@ async function deleteSource(sourceFile: string) {
       <div v-else-if="sources.length === 0" class="source-empty">暂无题库来源。</div>
 
       <div v-else class="source-list">
-        <div v-for="s in sources" :key="s.source_file" class="source-item">
+        <div v-for="s in sources" :key="s.source_key" class="source-item">
           <div class="source-info">
-            <span class="source-name">{{ s.source_file }}</span>
+            <span class="source-name">{{ s.display_name }}</span>
             <span class="source-count">{{ s.count }} 道题</span>
           </div>
           <button
             class="delete-btn"
-            :disabled="deletingSource === s.source_file"
-            @click="deleteSource(s.source_file)"
+            :disabled="deletingSource === s.source_key"
+            @click="deleteSource(s.source_key)"
           >
-            {{ deletingSource === s.source_file ? '删除中...' : '删除' }}
+            {{ deletingSource === s.source_key ? '删除中...' : '删除' }}
           </button>
         </div>
       </div>
@@ -262,51 +267,87 @@ async function deleteSource(sourceFile: string) {
 
 <style scoped>
 .import-container {
-  max-width: 800px;
+  width: 100%;
 }
 
-h2 {
-  margin-bottom: 24px;
-  color: #333;
+.page-heading {
+  margin-bottom: 26px;
+}
+
+.page-kicker {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--color-primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.page-heading h1 {
+  margin: 0 0 7px;
+  color: var(--color-text);
+  font-size: 30px;
+  letter-spacing: -0.035em;
+}
+
+.page-heading p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
 }
 
 .import-card {
-  background: #fff;
-  border-radius: 8px;
-  padding: 40px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, #fff, #fafbff);
+  border: 1px dashed var(--color-primary-border);
+  border-radius: var(--radius-xl);
+  padding: 44px;
   text-align: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   margin-bottom: 24px;
 }
 
 .import-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
+  display: grid;
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 18px;
+  place-items: center;
+  color: var(--color-primary);
+  font-size: 28px;
+  font-weight: 300;
+  background: var(--color-primary-soft);
+  border: 1px solid var(--color-primary-border);
+  border-radius: 18px;
 }
 
 .import-card h3 {
   margin-bottom: 8px;
-  color: #333;
+  color: var(--color-text);
 }
 
 .import-card p {
-  color: #666;
+  max-width: 520px;
+  margin-inline: auto;
+  color: var(--color-text-muted);
+  line-height: 1.7;
   margin-bottom: 24px;
 }
 
 .import-btn {
   padding: 12px 32px;
-  background-color: #1976d2;
+  background: linear-gradient(135deg, var(--color-primary), #6366f1);
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 11px;
   font-size: 16px;
   cursor: pointer;
   transition: background-color 0.2s;
 }
 
 .import-btn:hover:not(:disabled) {
-  background-color: #1565c0;
+  background: linear-gradient(135deg, var(--color-primary-hover), var(--color-primary));
 }
 
 .import-btn:disabled {
@@ -454,10 +495,11 @@ h2 {
 
 /* 题库来源管理 */
 .source-section {
-  background: #fff;
-  border-radius: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   margin-bottom: 24px;
 }
 
@@ -484,8 +526,15 @@ h2 {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background-color: #f9f9f9;
-  border-radius: 6px;
+  background-color: var(--color-surface-muted);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.source-item:hover {
+  background: var(--color-surface);
+  border-color: var(--color-border);
 }
 
 .source-info {
@@ -553,10 +602,11 @@ h2 {
 }
 
 .tips {
-  background: #fff;
-  border-radius: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .tips h3 {

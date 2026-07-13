@@ -1,4 +1,6 @@
 import { queryAll } from './database'
+import { buildKeywordCandidateFilter } from './search-query'
+import { normalizeSourceFilter } from './validation'
 
 export type ReviewStatus =
   | 'ALL'
@@ -32,10 +34,15 @@ export function searchQuestions(
   keyword: string,
   options?: { sourceFile?: string | null; reviewStatus?: ReviewStatus }
 ): SearchResult[] {
-  const effectiveSource = (!options?.sourceFile || options.sourceFile === 'ALL') ? null : options.sourceFile
+  const effectiveSource = normalizeSourceFilter(options?.sourceFile)
   const reviewStatus = options?.reviewStatus ?? 'ALL'
 
-  const whereClauses = ['(? IS NULL OR q.source_file = ?)']
+  const { originalKeyword, terms } = normalizeKeyword(keyword)
+  if (terms.length === 0) {
+    return []
+  }
+
+  const whereClauses = ['(? IS NULL OR q.source_key = ?)']
   const queryParams: any[] = [effectiveSource, effectiveSource]
 
   switch (reviewStatus) {
@@ -61,6 +68,11 @@ export function searchQuestions(
       break
   }
 
+  // 先由 SQLite 筛出至少命中一个关键词的候选集，再在内存中计算相关性。
+  const keywordFilter = buildKeywordCandidateFilter(terms)
+  whereClauses.push(keywordFilter.clause)
+  queryParams.push(...keywordFilter.params)
+
   const whereSql = whereClauses.join(' AND ')
 
   // 1. 获取所有题目
@@ -77,14 +89,7 @@ export function searchQuestions(
     WHERE ${whereSql}
   `, queryParams)
 
-  // 2. 处理搜索词
-  const { originalKeyword, terms } = normalizeKeyword(keyword)
-
-  if (terms.length === 0) {
-    return []
-  }
-
-  // 3. 计算每道题的相关性分数
+  // 2. 计算每道题的相关性分数
   const results: SearchResult[] = []
 
   for (const q of allQuestions) {
@@ -110,14 +115,14 @@ export function searchQuestions(
     }
   }
 
-  // 4. 排序：score DESC, matchRatio DESC, id ASC
+  // 3. 排序：score DESC, matchRatio DESC, id ASC
   results.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score
     if (b.matchRatio !== a.matchRatio) return b.matchRatio - a.matchRatio
     return a.id - b.id
   })
 
-  // 5. 限制返回数量
+  // 4. 限制返回数量
   return results.slice(0, 100)
 }
 
@@ -125,7 +130,7 @@ export function searchQuestions(
  * 处理搜索关键词
  */
 function normalizeKeyword(keyword: string): { originalKeyword: string; terms: string[] } {
-  const originalKeyword = keyword.trim()
+  const originalKeyword = keyword.trim().slice(0, 200)
 
   // 转小写，替换分隔符为空格
   const normalized = originalKeyword
@@ -135,7 +140,7 @@ function normalizeKeyword(keyword: string): { originalKeyword: string; terms: st
     .trim()
 
   // 分词
-  const terms = normalized.split(' ').filter(t => t.length > 0)
+  const terms = normalized.split(' ').filter(t => t.length > 0).slice(0, 20)
 
   return { originalKeyword, terms }
 }
@@ -188,6 +193,11 @@ function calculateScore(
     }
   }
 
+  function snippetFor(text: string, textLower: string, matchedTerms: string[]): string {
+    const keyword = textLower.includes(originalLower) ? originalKeyword : (matchedTerms[0] || originalKeyword)
+    return extractSnippet(text, keyword)
+  }
+
   // 1. title 完全等于 keyword，score + 1000
   if (titleLower === originalLower) {
     return {
@@ -213,25 +223,25 @@ function calculateScore(
   // 4. memory_point 包含所有 query terms，score + 450
   const memoryMatchedTerms = getMatchedTerms(memoryPointLower)
   if (memoryMatchedTerms.length === terms.length) {
-    updateBest(450, 'memory_point', extractSnippet(memoryPoint, originalKeyword), memoryMatchedTerms)
+    updateBest(450, 'memory_point', snippetFor(memoryPoint, memoryPointLower, memoryMatchedTerms), memoryMatchedTerms)
   }
 
   // 5. standard_answer 包含所有 query terms，score + 350
   const answerMatchedTerms = getMatchedTerms(standardAnswerLower)
   if (answerMatchedTerms.length === terms.length) {
-    updateBest(350, 'standard_answer', extractSnippet(standardAnswer, originalKeyword), answerMatchedTerms)
+    updateBest(350, 'standard_answer', snippetFor(standardAnswer, standardAnswerLower, answerMatchedTerms), answerMatchedTerms)
   }
 
   // 6. deep_answer 包含所有 query terms，score + 300
   const deepMatchedTerms = getMatchedTerms(deepAnswerLower)
   if (deepMatchedTerms.length === terms.length) {
-    updateBest(300, 'standard_answer', extractSnippet(deepAnswer, originalKeyword), deepMatchedTerms)
+    updateBest(300, 'standard_answer', snippetFor(deepAnswer, deepAnswerLower, deepMatchedTerms), deepMatchedTerms)
   }
 
   // 7. short_answer 包含所有 query terms，score + 300
   const shortMatchedTerms = getMatchedTerms(shortAnswerLower)
   if (shortMatchedTerms.length === terms.length) {
-    updateBest(300, 'standard_answer', extractSnippet(shortAnswer, originalKeyword), shortMatchedTerms)
+    updateBest(300, 'standard_answer', snippetFor(shortAnswer, shortAnswerLower, shortMatchedTerms), shortMatchedTerms)
   }
 
   // 8. title 包含任意 query term
@@ -248,16 +258,26 @@ function calculateScore(
   // 9. memory_point 包含任意 query term：每命中一个 term + 80
   if (memoryMatchedTerms.length > 0) {
     const score = memoryMatchedTerms.length * 80
-    updateBest(score, 'memory_point', extractSnippet(memoryPoint, originalKeyword), memoryMatchedTerms)
+    updateBest(score, 'memory_point', snippetFor(memoryPoint, memoryPointLower, memoryMatchedTerms), memoryMatchedTerms)
   }
 
   // 10. standard_answer 包含任意 query term：每命中一个 term + 50
   if (answerMatchedTerms.length > 0) {
     const score = answerMatchedTerms.length * 50
-    updateBest(score, 'standard_answer', extractSnippet(standardAnswer, originalKeyword), answerMatchedTerms)
+    updateBest(score, 'standard_answer', snippetFor(standardAnswer, standardAnswerLower, answerMatchedTerms), answerMatchedTerms)
   }
 
-  // 11. raw_markdown 兜底：+ 10
+  // 11. 深入/简短答案包含任意 term
+  if (deepMatchedTerms.length > 0) {
+    const score = deepMatchedTerms.length * 40
+    updateBest(score, 'standard_answer', snippetFor(deepAnswer, deepAnswerLower, deepMatchedTerms), deepMatchedTerms)
+  }
+  if (shortMatchedTerms.length > 0) {
+    const score = shortMatchedTerms.length * 40
+    updateBest(score, 'standard_answer', snippetFor(shortAnswer, shortAnswerLower, shortMatchedTerms), shortMatchedTerms)
+  }
+
+  // 12. raw_markdown 兜底：+ 10
   if (maxScore === 0 && rawMarkdownLower.includes(originalLower)) {
     updateBest(10, 'raw_markdown', extractSnippet(rawMarkdown, originalKeyword), [originalKeyword])
   }
