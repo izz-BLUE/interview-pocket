@@ -5,6 +5,8 @@ import fs from 'fs'
 
 let db: Database | null = null
 let dbPath: string = ''
+let transactionDepth = 0
+let hasPendingChanges = false
 
 export function getDatabasePath(): string {
   const userDataPath = app.getPath('userData')
@@ -26,6 +28,7 @@ export async function initDatabase(): Promise<Database> {
   }
 
   // 创建表
+  db.run('PRAGMA foreign_keys = ON')
   createTables(db)
 
   // 执行 migration
@@ -121,7 +124,18 @@ export function saveDatabase(): void {
   if (!db) return
   const data = db.export()
   const buffer = Buffer.from(data)
-  fs.writeFileSync(dbPath, buffer)
+  const tempPath = `${dbPath}.${process.pid}.tmp`
+
+  try {
+    fs.writeFileSync(tempPath, buffer)
+    fs.renameSync(tempPath, dbPath)
+    hasPendingChanges = false
+  } catch (error) {
+    if (fs.existsSync(tempPath)) {
+      fs.rmSync(tempPath, { force: true })
+    }
+    throw error
+  }
 }
 
 export function getDatabase(): Database {
@@ -164,5 +178,47 @@ export function queryOne(sql: string, params: any[] = []): any | null {
 export function runSql(sql: string, params: any[] = []): void {
   const db = getDatabase()
   db.run(sql, params)
-  saveDatabase()
+  hasPendingChanges = true
+  if (transactionDepth === 0) {
+    saveDatabase()
+  }
+}
+
+/**
+ * 将一组数据库操作作为一个原子事务执行，并且只在提交成功后落盘一次。
+ */
+export function runInTransaction<T>(operation: () => T): T {
+  const database = getDatabase()
+  if (transactionDepth !== 0) {
+    throw new Error('Nested database transactions are not supported')
+  }
+  let committed = false
+
+  database.run('BEGIN IMMEDIATE TRANSACTION')
+  transactionDepth++
+
+  try {
+    const result = operation()
+    transactionDepth--
+
+    database.run('COMMIT')
+    committed = true
+    if (hasPendingChanges) {
+      saveDatabase()
+    }
+    return result
+  } catch (error) {
+    if (transactionDepth > 0) {
+      transactionDepth--
+    }
+    if (!committed) {
+      try {
+        database.run('ROLLBACK')
+      } catch {
+        // 保留原始异常，避免回滚异常覆盖真正失败原因
+      }
+      hasPendingChanges = false
+    }
+    throw error
+  }
 }

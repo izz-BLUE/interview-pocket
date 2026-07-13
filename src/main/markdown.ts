@@ -87,10 +87,11 @@ export function parseMarkdown(content: string, sourceFile?: string): ParsedQuest
       continue
     }
 
-    // 检查是否是题目标题（H2 或 H1）
-    if (/^#{1,2}\s+/.test(trimmed)) {
-      const headingText = trimmed.replace(/^#{1,2}\s+/, '')
-      const headingLevel = trimmed.startsWith('## ') ? 2 : 1
+    // 统一识别 H1-H6，避免把 H3-H6 字段判断放进 H1/H2 分支后永远无法命中
+    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/)
+    if (headingMatch) {
+      const headingLevel = headingMatch[1].length
+      const headingText = headingMatch[2].trim()
 
       // 更新标题路径
       if (headingLevel === 1) {
@@ -118,8 +119,8 @@ export function parseMarkdown(content: string, sourceFile?: string): ParsedQuest
       }
 
       // 检查是否是字段标题（H3-H6）
-      if (/^#{3,6}\s+/.test(trimmed)) {
-        const fieldText = trimmed.replace(/^#{3,6}\s+/, '')
+      if (headingLevel >= 3) {
+        const fieldText = headingText
 
         // 检查字段类型
         const fieldType = detectFieldType(fieldText)

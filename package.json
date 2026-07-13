@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && vue-tsc -p tsconfig.web.json --noEmit",
+    "test": "node --test tests/*.test.mjs",
     "preview": "electron-vite preview",
     "postinstall": "electron-builder install-app-deps"
   },

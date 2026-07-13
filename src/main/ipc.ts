@@ -1,7 +1,8 @@
 import { ipcMain, dialog } from 'electron'
-import { queryAll, queryOne, runSql } from './database'
+import { queryAll, queryOne, runInTransaction, runSql } from './database'
 import { parseMarkdown } from './markdown'
 import { searchQuestions } from './search'
+import { calculateReviewSchedule } from './review'
 import { safeLog, safeError } from './logger'
 import fs from 'fs'
 import path from 'path'
@@ -25,6 +26,17 @@ export function registerIpcHandlers(): void {
           return { success: false, error: 'No file selected' }
         }
         targetPath = result.filePaths[0]
+      }
+
+      const extension = path.extname(targetPath).toLowerCase()
+      if (extension !== '.md' && extension !== '.markdown') {
+        return { success: false, error: 'Only Markdown files are supported' }
+      }
+
+      const fileStat = fs.statSync(targetPath)
+      const maxFileSize = 10 * 1024 * 1024
+      if (!fileStat.isFile() || fileStat.size > maxFileSize) {
+        return { success: false, error: 'Markdown file must be smaller than 10 MB' }
       }
 
       // 读取文件内容
@@ -59,7 +71,8 @@ export function registerIpcHandlers(): void {
       let followUpCount = 0
       let warningCount = 0
 
-      for (const q of parsedQuestions) {
+      runInTransaction(() => {
+        for (const q of parsedQuestions) {
         // 统计答案字段
         if (q.standard_answer) standardAnswerCount++
         if (q.short_answer) shortAnswerCount++
@@ -130,8 +143,9 @@ export function registerIpcHandlers(): void {
           }
         }
 
-        insertedCount++
-      }
+          insertedCount++
+        }
+      })
 
       return {
         success: true,
@@ -257,6 +271,16 @@ export function registerIpcHandlers(): void {
   // 提交复习评分
   ipcMain.handle('submitReview', (_event, questionId: number, score: number) => {
     try {
+      if (!Number.isInteger(questionId) || questionId <= 0) {
+        return { success: false, error: 'Invalid questionId' }
+      }
+      if (!Number.isInteger(score) || score < 1 || score > 5) {
+        return { success: false, error: 'Score must be an integer between 1 and 5' }
+      }
+      if (!queryOne('SELECT id FROM questions WHERE id = ?', [questionId])) {
+        return { success: false, error: 'Question not found' }
+      }
+
       // 获取今天的时间范围（本地时间）
       const now = new Date()
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -276,14 +300,16 @@ export function registerIpcHandlers(): void {
           AND review_date < ?
       `, [questionId, todayStartStr, todayEndStr])
 
-      // 插入复习记录
-      runSql(`
-        INSERT INTO review_records (question_id, score, review_date)
-        VALUES (?, ?, ?)
-      `, [questionId, score, nowStr])
+      let nextReviewAt = ''
+      runInTransaction(() => {
+        // 复习记录与进度必须同时成功或同时回滚
+        runSql(`
+          INSERT INTO review_records (question_id, score, review_date)
+          VALUES (?, ?, ?)
+        `, [questionId, score, nowStr])
 
-      // 更新复习进度
-      const nextReviewAt = updateReviewProgress(questionId, score, nowStr)
+        nextReviewAt = updateReviewProgress(questionId, score, nowStr)
+      })
 
       return {
         success: true,
@@ -340,28 +366,32 @@ export function registerIpcHandlers(): void {
 
       const placeholders = ids.map(() => '?').join(',')
 
-      // 2. 统计并删除 review_records
-      const rrCount = queryOne(
-        `SELECT COUNT(*) as count FROM review_records WHERE question_id IN (${placeholders})`,
-        ids
-      )
-      runSql(
-        `DELETE FROM review_records WHERE question_id IN (${placeholders})`,
-        ids
-      )
+      let rrCount: any = null
+      let rpCount: any = null
+      runInTransaction(() => {
+        // 2. 统计并删除 review_records
+        rrCount = queryOne(
+          `SELECT COUNT(*) as count FROM review_records WHERE question_id IN (${placeholders})`,
+          ids
+        )
+        runSql(
+          `DELETE FROM review_records WHERE question_id IN (${placeholders})`,
+          ids
+        )
 
-      // 3. 统计并删除 review_progress
-      const rpCount = queryOne(
-        `SELECT COUNT(*) as count FROM review_progress WHERE question_id IN (${placeholders})`,
-        ids
-      )
-      runSql(
-        `DELETE FROM review_progress WHERE question_id IN (${placeholders})`,
-        ids
-      )
+        // 3. 统计并删除 review_progress
+        rpCount = queryOne(
+          `SELECT COUNT(*) as count FROM review_progress WHERE question_id IN (${placeholders})`,
+          ids
+        )
+        runSql(
+          `DELETE FROM review_progress WHERE question_id IN (${placeholders})`,
+          ids
+        )
 
-      // 4. 删除 questions
-      runSql('DELETE FROM questions WHERE source_file = ?', [trimmed])
+        // 4. 删除 questions
+        runSql('DELETE FROM questions WHERE source_file = ?', [trimmed])
+      })
 
       return {
         success: true,
@@ -382,6 +412,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('getCramQuestions', (_event, params?: { sourceFile?: string | null; limit?: number }) => {
     try {
       const sourceFile = params?.sourceFile ?? null
+      const effectiveSource = (!sourceFile || sourceFile === 'ALL') ? null : sourceFile
       const rawLimit = params?.limit ?? 200
       const limit = Math.min(Math.max(Number(rawLimit) || 200, 1), 500)
       const questions = queryAll(`
@@ -390,7 +421,7 @@ export function registerIpcHandlers(): void {
         WHERE (? IS NULL OR source_file = ?)
         ORDER BY id ASC
         LIMIT ?
-      `, [sourceFile, sourceFile, limit])
+      `, [effectiveSource, effectiveSource, limit])
       return { success: true, data: questions }
     } catch (error) {
       safeError('Get cram questions failed:', error)
@@ -426,13 +457,12 @@ export function registerIpcHandlers(): void {
   // 重置错题计数
   ipcMain.handle('resetWrongCount', (_event, questionId: number) => {
     try {
+      if (!Number.isInteger(questionId) || questionId <= 0) {
+        return { success: false, error: 'Invalid questionId' }
+      }
       runSql(`
         UPDATE review_progress
-        SET wrong_count = 0,
-            mastery_score = CASE
-              WHEN mastery_score < 80 THEN 80
-              ELSE mastery_score
-            END
+        SET wrong_count = 0
         WHERE question_id = ?
       `, [questionId])
       return { success: true, questionId }
@@ -578,59 +608,17 @@ export function registerIpcHandlers(): void {
  */
 function updateReviewProgress(questionId: number, score: number, nowStr: string): string {
   const existing = queryOne('SELECT * FROM review_progress WHERE question_id = ?', [questionId])
-
-  const now = new Date(nowStr)
-  let nextDate: Date
-  let interval: number
-
-  // 根据 score 确定复习间隔
-  switch (score) {
-    case 1:
-    case 2:
-      interval = 1  // 明天
-      break
-    case 3:
-      interval = 3  // 3 天后
-      break
-    case 4:
-      interval = 7  // 7 天后
-      break
-    case 5:
-      interval = 15  // 15 天后
-      break
-    default:
-      interval = 1
-  }
-
-  nextDate = new Date(now)
-  nextDate.setDate(nextDate.getDate() + interval)
-
-  const nextDateStr = nextDate.toISOString()
-  const todayStr = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
-
-  // 计算 mastery_score
-  let masteryScore: number
-  switch (score) {
-    case 1: masteryScore = 20; break
-    case 2: masteryScore = 40; break
-    case 3: masteryScore = 60; break
-    case 4: masteryScore = 80; break
-    case 5: masteryScore = 100; break
-    default: masteryScore = 0
-  }
+  const { interval, nextDateStr, todayStr, wrongCount, masteryScore } =
+    calculateReviewSchedule(existing, score, nowStr)
 
   if (!existing) {
     // 首次复习
-    const wrongCount = score <= 2 ? 1 : 0
     runSql(`
       INSERT INTO review_progress (question_id, review_count, last_review_date, next_review_date, ease_factor, interval_days, wrong_count, mastery_score)
       VALUES (?, 1, ?, ?, 2.5, ?, ?, ?)
     `, [questionId, todayStr, nextDateStr, interval, wrongCount, masteryScore])
   } else {
     // 更新
-    const wrongCount = (existing.wrong_count || 0) + (score <= 2 ? 1 : 0)
-    const newMasteryScore = Math.max(existing.mastery_score || 0, masteryScore)
-
     runSql(`
       UPDATE review_progress
       SET review_count = review_count + 1,
@@ -640,7 +628,7 @@ function updateReviewProgress(questionId: number, score: number, nowStr: string)
           wrong_count = ?,
           mastery_score = ?
       WHERE question_id = ?
-    `, [todayStr, nextDateStr, interval, wrongCount, newMasteryScore, questionId])
+    `, [todayStr, nextDateStr, interval, wrongCount, masteryScore, questionId])
   }
 
   return nextDateStr

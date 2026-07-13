@@ -109,6 +109,12 @@ export interface ImportReport {
   insertedQuestionIds: number[]
 }
 
+export interface ImportResponse extends ApiResponse {
+  count?: number
+  duplicatedCount?: number
+  report?: ImportReport
+}
+
 export interface QuestionReviewInfo {
   progress: {
     review_count: number
@@ -143,7 +149,7 @@ export interface DeleteQuestionSourceResult {
 }
 
 export interface ElectronAPI {
-  importMarkdownFile: (filePath?: string) => Promise<ApiResponse>
+  importMarkdownFile: (filePath?: string) => Promise<ImportResponse>
   listQuestions: (params?: { limit?: number; offset?: number; sourceFile?: string | null; reviewStatus?: ReviewStatus }) => Promise<ApiResponse<QuestionSummary[]>>
   searchQuestions: (keyword: string, params?: { sourceFile?: string | null; reviewStatus?: ReviewStatus }) => Promise<ApiResponse<SearchResult[]>>
   getQuestionById: (id: number) => Promise<ApiResponse<QuestionDetail>>

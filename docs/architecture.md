@@ -139,9 +139,8 @@ getQuestionSources()
         ▼
 deleteQuestionSource(source_file)
   - 查出该来源所有 question_id
-  - DELETE review_records WHERE question_id IN (...)
-  - DELETE review_progress WHERE question_id IN (...)
-  - DELETE questions WHERE source_file = ?
+  - 在同一事务中删除 review_records / review_progress / questions
+  - 事务提交后统一持久化数据库文件
   - 返回删除报告
         │
         ▼
@@ -311,4 +310,4 @@ questions 1 ──── N review_records
 questions 1 ──── 1 review_progress
 ```
 
-删除题库来源时，需要按 `review_records → review_progress → questions` 的顺序删除，避免孤儿数据。
+数据库已启用外键约束，批量导入、提交复习和删除来源均使用事务，避免产生孤儿数据或半完成状态。
